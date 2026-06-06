@@ -45,6 +45,7 @@ function App() {
   const [eraserMode, setEraserMode] = useState(false);
   const [quiltWidth, setQuiltWidth] = useState(60);
   const [quiltHeight, setQuiltHeight] = useState(80);
+  const [hasStarted, setHasStarted] = useState(false);
 
   const handlePresetSelect = (hex) => {
     setSelectedColor(hex);
@@ -115,6 +116,36 @@ function App() {
 
   return (
     <div className="abby-patch">
+      {!hasStarted ? (
+        <section className="abby-patch__landing">
+          <div className="abby-patch__landing-content">
+            <p className="abby-patch__landing-eyebrow">Quilt design studio</p>
+            <h1 className="abby-patch__landing-title">
+              Design your quilt,
+              <br />
+              one patch at a time
+            </h1>
+            <p className="abby-patch__landing-desc">
+              Plan your layout, pick fabric colors, and calculate yardage — all in one cozy
+              place.
+            </p>
+            <button
+              type="button"
+              className="abby-patch__button abby-patch__button--start"
+              onClick={() => setHasStarted(true)}
+            >
+              Start now
+            </button>
+          </div>
+          <div className="abby-patch__landing-logo-wrap">
+            <img
+              src={logo}
+              alt="The Abby Patch"
+              className="abby-patch__landing-logo"
+            />
+          </div>
+        </section>
+      ) : (
       <div className="abby-patch__main">
         <header className="abby-patch__header">
           <img src={logo} alt="The Abby Patch" className="abby-patch__logo" />
@@ -378,6 +409,7 @@ function App() {
           </>
         )}
       </div>
+      )}
     </div>
   );
 }
