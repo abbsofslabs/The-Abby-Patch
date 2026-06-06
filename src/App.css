@@ -173,6 +173,53 @@
   padding: 0.5rem 0 0.25rem;
 }
 
+.abby-patch__tabs {
+  display: flex;
+  width: 100%;
+  max-width: 320px;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 2px solid var(--brown);
+  border-radius: 999px;
+}
+
+.abby-patch__tab {
+  flex: 1;
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.65rem 1rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brown-mid);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.abby-patch__tab:hover {
+  background: rgba(141, 160, 128, 0.12);
+  color: var(--brown);
+}
+
+.abby-patch__tab--active {
+  background: var(--brown);
+  color: var(--cream);
+  box-shadow: 0 2px 8px rgba(61, 46, 38, 0.2);
+}
+
+.abby-patch__tab--active:hover {
+  background: var(--brown-mid);
+  color: var(--cream);
+}
+
+.abby-patch__grid-title {
+  margin-bottom: 1rem;
+}
+
 .abby-patch__logo {
   width: min(220px, 55vw);
   height: auto;
@@ -269,8 +316,23 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.abby-patch__button:active {
-  transform: translateY(0);
+.abby-patch__button--download {
+  display: block;
+  margin: 0.5rem auto 0;
+  padding: 0.85rem 2rem;
+}
+
+.abby-patch__button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.abby-patch__button:disabled:hover {
+  transform: none;
+  box-shadow:
+    0 3px 10px rgba(111, 133, 98, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .abby-patch__tools {
@@ -529,6 +591,47 @@
   justify-content: center;
 }
 
+.abby-patch__repeat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.abby-patch__repeat-desc {
+  margin: 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--brown-mid);
+  line-height: 1.45;
+}
+
+.abby-patch__repeat-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.abby-patch__button--tile {
+  padding: 0.75rem 1.75rem;
+}
+
+.abby-patch__repeat-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  font-style: italic;
+  font-family: 'Libre Baskerville', Georgia, serif;
+  color: var(--brown-mid);
+  text-align: center;
+  opacity: 0.9;
+}
+
+.abby-patch__cell--repeat-region {
+  box-shadow: inset 0 0 0 2px var(--sage);
+  z-index: 1;
+}
+
 .abby-patch__grid {
   display: grid;
   gap: 0;
@@ -665,11 +768,31 @@
 
 .abby-patch__yardage-table tfoot td {
   border-bottom: none;
-  border-top: 2px solid var(--brown);
   font-family: 'Libre Baskerville', Georgia, serif;
+  color: var(--brown-mid);
+  padding-top: 0.5rem;
+}
+
+.abby-patch__yardage-subtotal td {
+  font-size: 0.82rem;
+  font-weight: 500;
+  border-top: 1px solid rgba(168, 152, 136, 0.35);
+}
+
+.abby-patch__yardage-subtotal td:last-child {
+  font-weight: 600;
+}
+
+.abby-patch__yardage-total td {
+  border-top: 2px solid var(--brown);
   font-weight: 700;
   color: var(--brown);
   padding-top: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.abby-patch__yardage-total td:last-child {
+  font-size: 1rem;
 }
 
 .abby-patch__yardage-color {

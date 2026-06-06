@@ -63,12 +63,7 @@ export function calculateColorYardage(count, blockWidth, blockHeight) {
   };
 }
 
-export function buildYardageReport(cellColors, quiltWidth, quiltHeight, columns, rows) {
-  const blockSize = calculateBlockSize(quiltWidth, quiltHeight, columns, rows);
-  if (!blockSize) {
-    return { blockSize: null, colors: [], totalYards: 0 };
-  }
-
+export function countColorsByHex(cellColors) {
   const counts = {};
   cellColors.forEach((color) => {
     if (color) {
@@ -76,6 +71,16 @@ export function buildYardageReport(cellColors, quiltWidth, quiltHeight, columns,
       counts[key] = (counts[key] || 0) + 1;
     }
   });
+  return counts;
+}
+
+export function buildYardageReport(cellColors, quiltWidth, quiltHeight, columns, rows) {
+  const blockSize = calculateBlockSize(quiltWidth, quiltHeight, columns, rows);
+  if (!blockSize) {
+    return { blockSize: null, colors: [], totalYards: 0 };
+  }
+
+  const counts = countColorsByHex(cellColors);
 
   const colors = Object.entries(counts)
     .map(([color, count]) => {
@@ -87,6 +92,74 @@ export function buildYardageReport(cellColors, quiltWidth, quiltHeight, columns,
   const totalYards = roundUpToQuarter(colors.reduce((sum, row) => sum + row.yards, 0));
 
   return { blockSize, colors, totalYards };
+}
+
+export function buildCombinedYardageReport(
+  frontCellColors,
+  backCellColors,
+  quiltWidth,
+  quiltHeight,
+  columns,
+  rows
+) {
+  const blockSize = calculateBlockSize(quiltWidth, quiltHeight, columns, rows);
+  if (!blockSize) {
+    return {
+      blockSize: null,
+      colors: [],
+      totalYards: 0,
+      frontTotalYards: 0,
+      backTotalYards: 0,
+    };
+  }
+
+  const frontCounts = countColorsByHex(frontCellColors);
+  const backCounts = countColorsByHex(backCellColors);
+  const allColorKeys = new Set([
+    ...Object.keys(frontCounts),
+    ...Object.keys(backCounts),
+  ]);
+
+  const colors = [...allColorKeys]
+    .map((color) => {
+      const frontCount = frontCounts[color] || 0;
+      const backCount = backCounts[color] || 0;
+      const totalCount = frontCount + backCount;
+      const yardage = calculateColorYardage(totalCount, blockSize.width, blockSize.height);
+      return {
+        color,
+        frontCount,
+        backCount,
+        totalCount,
+        ...yardage,
+      };
+    })
+    .sort((a, b) => b.totalCount - a.totalCount);
+
+  const frontReport = buildYardageReport(
+    frontCellColors,
+    quiltWidth,
+    quiltHeight,
+    columns,
+    rows
+  );
+  const backReport = buildYardageReport(
+    backCellColors,
+    quiltWidth,
+    quiltHeight,
+    columns,
+    rows
+  );
+
+  const totalYards = roundUpToQuarter(colors.reduce((sum, row) => sum + row.yards, 0));
+
+  return {
+    blockSize,
+    colors,
+    totalYards,
+    frontTotalYards: frontReport.totalYards,
+    backTotalYards: backReport.totalYards,
+  };
 }
 
 export function formatYards(yards) {
