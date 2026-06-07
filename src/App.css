@@ -34,24 +34,21 @@
   z-index: 0;
 }
 
-.abby-patch__needle {
+.abby-patch__needle-art {
   position: fixed;
-  width: 64px;
-  opacity: 0.5;
-}
-
-.abby-patch__needle svg {
-  display: block;
-  width: 100%;
   height: auto;
+  display: block;
+  transform-origin: center center;
+  mix-blend-mode: multiply;
+  filter: sepia(0.35) saturate(0.6);
 }
 
-.abby-patch__needle--left {
-  left: max(0.75rem, calc((100vw - 1100px) / 2 * 0.42));
+.abby-patch__needle-art--left {
+  left: max(0.5rem, calc((100vw - 1100px) / 2 * 0.38));
 }
 
-.abby-patch__needle--right {
-  right: max(0.75rem, calc((100vw - 1100px) / 2 * 0.42));
+.abby-patch__needle-art--right {
+  right: max(0.5rem, calc((100vw - 1100px) / 2 * 0.38));
 }
 
 @media (max-width: 640px) {
