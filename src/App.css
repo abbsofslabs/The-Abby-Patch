@@ -27,58 +27,48 @@
   color: var(--text);
 }
 
-.abby-patch__needle-field {
+.abby-patch__florals {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  overflow: hidden;
 }
 
-.abby-patch__needle-dancer {
+.abby-patch__floral {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 130px;
-  height: auto;
-  transform-origin: center center;
-  will-change: transform;
-  opacity: 0.42;
+  width: 52px;
+  color: var(--sage-dark);
+  opacity: 0.22;
 }
 
-.abby-patch__needle-svg {
+.abby-patch__floral svg {
   display: block;
   width: 100%;
   height: auto;
-  overflow: visible;
 }
 
-.abby-patch__needle-thread {
-  fill: none;
-  stroke: var(--brown);
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.abby-patch__floral--tl {
+  top: 1.5rem;
+  left: max(1rem, calc((100vw - 1100px) / 2 * 0.35));
 }
 
-.abby-patch__needle-body {
-  fill: var(--brown);
+.abby-patch__floral--tr {
+  top: 1.5rem;
+  right: max(1rem, calc((100vw - 1100px) / 2 * 0.35));
 }
 
-.abby-patch__needle-eye {
-  fill: #e8e2d6;
-  stroke: var(--brown);
-  stroke-width: 3.5;
+.abby-patch__floral--bl {
+  bottom: 1.5rem;
+  left: max(1rem, calc((100vw - 1100px) / 2 * 0.35));
+}
+
+.abby-patch__floral--br {
+  bottom: 1.5rem;
+  right: max(1rem, calc((100vw - 1100px) / 2 * 0.35));
 }
 
 @media (max-width: 640px) {
-  .abby-patch__needle-field {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .abby-patch__needle-field {
+  .abby-patch__florals {
     display: none;
   }
 }

@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 import { HexColorPicker } from 'react-colorful';
 import logo from './assets/abby-patch-logo.png';
 import FreePatternModal from './components/FreePatternModal';
-import NeedleDecorations from './components/NeedleDecorations';
+import FloralDecorations from './components/FloralDecorations';
 import PaywallModal from './components/PaywallModal';
 import PdfCaptureGrids from './components/PdfCaptureGrids';
 import PaletteSwatch from './components/PaletteSwatch';
@@ -437,7 +437,7 @@ function App() {
 
   return (
     <div className="abby-patch">
-      <NeedleDecorations />
+      <FloralDecorations />
       {!hasStarted ? (
         <section className="abby-patch__landing">
           <div className="abby-patch__landing-content">
