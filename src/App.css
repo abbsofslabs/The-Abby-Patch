@@ -372,7 +372,6 @@
 }
 
 .abby-patch__palette-swatch:hover {
-  transform: scale(1.08);
   z-index: 1;
 }
 
@@ -586,6 +585,35 @@
   flex-shrink: 0;
 }
 
+.abby-patch__pdf-capture--exporting .abby-patch__pdf-cell,
+.abby-patch__grid--exporting .abby-patch__cell {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.abby-patch__pdf-capture {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.abby-patch__pdf-grid {
+  display: grid;
+  gap: 0;
+  width: 480px;
+  aspect-ratio: 1;
+  border: 2px solid var(--brown);
+  margin-bottom: 1rem;
+}
+
+.abby-patch__pdf-cell {
+  border: 1px solid var(--cell-border);
+  min-height: 0;
+}
+
 .abby-patch__grid-wrapper {
   display: flex;
   justify-content: center;
@@ -656,8 +684,6 @@
 
 .abby-patch__cell:hover {
   opacity: 0.92;
-  z-index: 1;
-  transform: scale(1.02);
 }
 
 .abby-patch__cell:focus {
