@@ -21,14 +21,13 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "cross-env PORT=3000 react-scripts start",
     "server": "node server/index.js",
-    "dev": "concurrently \"npm run server\" \"npm start\"",
+    "dev": "concurrently -n stripe,app -c blue,green \"npm run server\" \"npm run start\"",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
-  "proxy": "http://localhost:4242",
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -48,6 +47,7 @@
     ]
   },
   "devDependencies": {
-    "concurrently": "^10.0.3"
+    "concurrently": "^10.0.3",
+    "cross-env": "^7.0.3"
   }
 }

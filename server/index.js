@@ -8,7 +8,8 @@ const cors = require('cors');
 const Stripe = require('stripe');
 
 const app = express();
-const port = process.env.PORT || 4242;
+// Use CHECKOUT_SERVER_PORT — not PORT, because CRA also reads PORT from .env.local
+const port = Number(process.env.CHECKOUT_SERVER_PORT || process.env.STRIPE_PORT || 4242);
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
 function getPriceIdForMode(mode) {
@@ -42,8 +43,17 @@ if (!status.singlePriceId || !status.subscriptionPriceId) {
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+  })
+);
 app.use(express.json());
+
+app.options('/api/create-checkout-session', (_req, res) => {
+  res.sendStatus(204);
+});
 
 app.get('/api/checkout-status', (_req, res) => {
   res.json(getCheckoutConfigStatus());
