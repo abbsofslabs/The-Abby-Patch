@@ -16,22 +16,22 @@ function QuiltGrid({
   onCellPointerDown,
   onCellPointerEnter,
 }) {
-  const gridStyle = useMemo(() => {
-    const cellSize = Math.max(8, Math.min(14, Math.floor(720 / Math.max(rows, columns))));
-    const gridSize = Math.max(480, Math.min(720, Math.max(rows, columns) * cellSize));
-
-    return {
+  const gridStyle = useMemo(
+    () => ({
       gridTemplateRows: `repeat(${rows}, 1fr)`,
       gridTemplateColumns: `repeat(${columns}, 1fr)`,
-      width: `${gridSize}px`,
-      maxWidth: 'min(90vw, 720px)',
-    };
-  }, [rows, columns]);
+      '--grid-cols': columns,
+      '--grid-rows': rows,
+    }),
+    [rows, columns]
+  );
 
   const selectedSet = useMemo(() => new Set(selectedBlocks), [selectedBlocks]);
+  const isDense = Math.max(rows, columns) > 24;
 
   const gridClassName = [
     'abby-patch__grid',
+    isDense ? 'abby-patch__grid--dense' : '',
     eraserMode ? 'abby-patch__grid--eraser' : '',
     selectionMode ? 'abby-patch__grid--selecting' : '',
     suppressRepeatHighlight ? 'abby-patch__grid--exporting' : '',

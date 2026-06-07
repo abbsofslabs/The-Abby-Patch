@@ -169,9 +169,6 @@
     align-items: center;
   }
 
-  .abby-patch__grid {
-    max-width: min(100%, 720px);
-  }
 }
 
 @media (max-width: 768px) {
@@ -830,10 +827,11 @@
 .abby-patch__grid-wrapper {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   width: 100%;
   max-width: 100%;
-  overflow: auto;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .abby-patch__yardage-panel-wrap {
@@ -917,11 +915,22 @@
 }
 
 .abby-patch__grid {
+  --grid-cols: 1;
+  --grid-rows: 1;
+  --grid-max-height: min(58vh, 500px);
   display: grid;
   gap: 0;
-  aspect-ratio: 1;
+  width: min(100%, calc(var(--grid-max-height) * var(--grid-cols) / var(--grid-rows)));
+  max-width: 100%;
+  max-height: var(--grid-max-height);
+  aspect-ratio: var(--grid-cols) / var(--grid-rows);
+  margin-inline: auto;
   border: 2px solid var(--brown);
   box-shadow: inset 0 0 0 1px var(--cream);
+}
+
+.abby-patch__grid--dense .abby-patch__cell-merge-label {
+  display: none;
 }
 
 .abby-patch__grid--eraser {
@@ -932,11 +941,16 @@
   position: relative;
   background: var(--cream);
   border: 1px solid var(--cell-border);
+  min-width: 0;
   min-height: 0;
   padding: 0;
   cursor: pointer;
   transition: opacity 0.1s;
   touch-action: none;
+}
+
+.abby-patch__grid--dense .abby-patch__cell {
+  border-width: 0.5px;
 }
 
 .abby-patch__cell--merge-hide-top {
