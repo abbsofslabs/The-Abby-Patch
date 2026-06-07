@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { HexColorPicker } from 'react-colorful';
 import logo from './assets/abby-patch-logo.png';
 import FreePatternModal from './components/FreePatternModal';
+import NeedleDecorations from './components/NeedleDecorations';
 import PaywallModal from './components/PaywallModal';
 import PdfCaptureGrids from './components/PdfCaptureGrids';
 import PaletteSwatch from './components/PaletteSwatch';
@@ -12,9 +13,10 @@ import { CREAM, FABRIC_PALETTE, QUILT_SIZE_PRESETS, SIDES } from './constants';
 import { generateQuiltPdf } from './generateQuiltPdf';
 import { applyTilePattern, clampRepeatSize } from './gridUtils';
 import {
-  MAX_GRID_SIZE,
   buildCombinedYardageReport,
   buildYardageReport,
+  calculateGridDimensions,
+  formatDimension,
 } from './yardageCalculator';
 import {
   getUserEmail,
@@ -39,8 +41,6 @@ function createSideState(rows, columns, repeatWidth = 2, repeatHeight = 2) {
 }
 
 function App() {
-  const [rows, setRows] = useState(4);
-  const [columns, setColumns] = useState(4);
   const [grid, setGrid] = useState(null);
   const [activeSide, setActiveSide] = useState('front');
   const [sides, setSides] = useState({
@@ -53,6 +53,7 @@ function App() {
   const [eraserMode, setEraserMode] = useState(false);
   const [quiltWidth, setQuiltWidth] = useState(60);
   const [quiltHeight, setQuiltHeight] = useState(80);
+  const [blockSize, setBlockSize] = useState(6);
   const [quiltSizePreset, setQuiltSizePreset] = useState('custom');
   const [hasStarted, setHasStarted] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
@@ -98,8 +99,14 @@ function App() {
   }, []);
 
   const handleGenerate = useCallback(() => {
-    const r = Math.max(1, Math.min(MAX_GRID_SIZE, Number(rows) || 1));
-    const c = Math.max(1, Math.min(MAX_GRID_SIZE, Number(columns) || 1));
+    const dimensions = calculateGridDimensions(quiltWidth, quiltHeight, blockSize);
+    if (!dimensions) {
+      window.alert('Please enter valid quilt width, height, and block size.');
+      return;
+    }
+
+    const { rows: r, columns: c, finishedWidth, finishedHeight, blockSize: block } =
+      dimensions;
 
     setSides((prevSides) => {
       const activeRepeatW = prevSides[activeSide].repeatWidth;
@@ -110,9 +117,15 @@ function App() {
         back: createSideState(r, c, activeRepeatW, activeRepeatH),
       };
     });
-    setGrid({ rows: r, columns: c });
+    setGrid({
+      rows: r,
+      columns: c,
+      blockSize: block,
+      finishedWidth,
+      finishedHeight,
+    });
     setEraserMode(false);
-  }, [rows, columns, activeSide]);
+  }, [quiltWidth, quiltHeight, blockSize, activeSide]);
 
   const handleTilePattern = useCallback(() => {
     if (!grid) return;
@@ -209,6 +222,10 @@ function App() {
     }
   }, []);
 
+  const handleBlockSizeChange = useCallback((event) => {
+    setBlockSize(event.target.value);
+  }, []);
+
   const colorLegend = useMemo(() => {
     const counts = {};
     cellColors.forEach((color) => {
@@ -225,18 +242,12 @@ function App() {
     return buildCombinedYardageReport(
       sides.front.cellColors,
       sides.back.cellColors,
-      quiltWidth,
-      quiltHeight,
+      grid.finishedWidth,
+      grid.finishedHeight,
       grid.columns,
       grid.rows
     );
-  }, [
-    sides.front.cellColors,
-    sides.back.cellColors,
-    grid,
-    quiltWidth,
-    quiltHeight,
-  ]);
+  }, [sides.front.cellColors, sides.back.cellColors, grid]);
 
   const executePdfDownload = useCallback(async () => {
     if (!grid || !yardageReport?.colors?.length) {
@@ -245,15 +256,15 @@ function App() {
 
     const frontReport = buildYardageReport(
       sides.front.cellColors,
-      quiltWidth,
-      quiltHeight,
+      grid.finishedWidth,
+      grid.finishedHeight,
       grid.columns,
       grid.rows
     );
     const backReport = buildYardageReport(
       sides.back.cellColors,
-      quiltWidth,
-      quiltHeight,
+      grid.finishedWidth,
+      grid.finishedHeight,
       grid.columns,
       grid.rows
     );
@@ -292,7 +303,7 @@ function App() {
         setIsDownloadingPdf(false);
       });
     }
-  }, [grid, quiltWidth, quiltHeight, sides.front.cellColors, sides.back.cellColors, yardageReport]);
+  }, [grid, sides.front.cellColors, sides.back.cellColors, yardageReport]);
 
   executePdfDownloadRef.current = executePdfDownload;
 
@@ -309,12 +320,11 @@ function App() {
     const restored = loadAndClearPatternSession();
     if (restored) {
       setHasStarted(true);
-      setRows(restored.rows);
-      setColumns(restored.columns);
       setGrid(restored.grid);
       setSides(restored.sides);
       setQuiltWidth(restored.quiltWidth);
       setQuiltHeight(restored.quiltHeight);
+      setBlockSize(restored.blockSize ?? restored.grid?.blockSize ?? 6);
       setQuiltSizePreset(restored.quiltSizePreset);
       setActiveSide(restored.activeSide);
     }
@@ -383,12 +393,11 @@ function App() {
     setCheckoutLoading(true);
     try {
       savePatternSession({
-        rows,
-        columns,
         grid,
         sides,
         quiltWidth,
         quiltHeight,
+        blockSize,
         quiltSizePreset,
         activeSide,
       });
@@ -398,7 +407,7 @@ function App() {
       window.alert(error.message || 'Unable to start checkout. Please try again.');
       setCheckoutLoading(false);
     }
-  }, [rows, columns, grid, sides, quiltWidth, quiltHeight, quiltSizePreset, activeSide]);
+  }, [grid, sides, quiltWidth, quiltHeight, blockSize, quiltSizePreset, activeSide]);
 
   const handlePaySingle = useCallback(
     (email) => {
@@ -416,6 +425,7 @@ function App() {
 
   return (
     <div className="abby-patch">
+      <NeedleDecorations />
       {!hasStarted ? (
         <section className="abby-patch__landing">
           <div className="abby-patch__landing-content">
@@ -449,33 +459,73 @@ function App() {
           </header>
 
           <section className="abby-patch__controls abby-patch__panel">
-            <div className="abby-patch__input-group">
-              <label htmlFor="rows">Rows</label>
-              <input
-                id="rows"
-                type="number"
-                min="1"
-                max={MAX_GRID_SIZE}
-                value={rows}
-                onChange={(e) => setRows(e.target.value)}
-              />
-            </div>
+            <div className="abby-patch__setup">
+              <div className="abby-patch__input-group abby-patch__input-group--full">
+                <label htmlFor="quilt-size-preset">Quilt size</label>
+                <select
+                  id="quilt-size-preset"
+                  className="abby-patch__select"
+                  value={quiltSizePreset}
+                  onChange={handleQuiltSizePresetChange}
+                >
+                  {QUILT_SIZE_PRESETS.map(({ id, label }) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="abby-patch__input-group">
-              <label htmlFor="columns">Columns</label>
-              <input
-                id="columns"
-                type="number"
-                min="1"
-                max={MAX_GRID_SIZE}
-                value={columns}
-                onChange={(e) => setColumns(e.target.value)}
-              />
-            </div>
+              <div className="abby-patch__setup-dimensions">
+                <div className="abby-patch__input-group">
+                  <label htmlFor="quilt-width">Quilt width (in)</label>
+                  <input
+                    id="quilt-width"
+                    type="number"
+                    min="1"
+                    step="0.25"
+                    value={quiltWidth}
+                    onChange={handleQuiltWidthChange}
+                  />
+                </div>
 
-            <button type="button" className="abby-patch__button" onClick={handleGenerate}>
-              Generate grid
-            </button>
+                <div className="abby-patch__input-group">
+                  <label htmlFor="quilt-height">Quilt height (in)</label>
+                  <input
+                    id="quilt-height"
+                    type="number"
+                    min="1"
+                    step="0.25"
+                    value={quiltHeight}
+                    onChange={handleQuiltHeightChange}
+                  />
+                </div>
+
+                <div className="abby-patch__input-group">
+                  <label htmlFor="block-size">Block size (in)</label>
+                  <input
+                    id="block-size"
+                    type="number"
+                    min="0.25"
+                    step="0.25"
+                    value={blockSize}
+                    onChange={handleBlockSizeChange}
+                  />
+                </div>
+
+                <button type="button" className="abby-patch__button" onClick={handleGenerate}>
+                  Generate grid
+                </button>
+              </div>
+
+              {grid && (
+                <p className="abby-patch__grid-summary">
+                  Your quilt will be approximately{' '}
+                  {formatDimension(grid.finishedWidth)}&times;{formatDimension(grid.finishedHeight)}{' '}
+                  inches based on {grid.columns}&times;{grid.rows} blocks.
+                </p>
+              )}
+            </div>
           </section>
 
           {grid && (
@@ -501,7 +551,10 @@ function App() {
               role="tabpanel"
               id={`panel-${activeSide}`}
               aria-labelledby={`tab-${activeSide}`}
+              className="abby-patch__tabpanel"
             >
+              <div className="abby-patch__workspace">
+                <div className="abby-patch__sidebar">
               <section className="abby-patch__tools abby-patch__panel">
                 <div className="abby-patch__palette-panel">
                   <h2 className="abby-patch__section-title">Choose a fabric — {activeSideLabel}</h2>
@@ -637,7 +690,9 @@ function App() {
                   section that will repeat.
                 </p>
               </section>
+                </div>
 
+                <div className="abby-patch__canvas">
               <section className="abby-patch__grid-wrapper abby-patch__panel">
                 <h2 className="abby-patch__section-title abby-patch__grid-title">
                   {activeSideLabel} side
@@ -654,18 +709,14 @@ function App() {
                   onCellClick={handleCellClick}
                 />
               </section>
+                </div>
+              </div>
 
               <YardagePanel
                 grid={grid}
-                quiltWidth={quiltWidth}
-                quiltHeight={quiltHeight}
-                quiltSizePreset={quiltSizePreset}
                 yardageReport={yardageReport}
                 isDownloadingPdf={isDownloadingPdf}
                 onDownloadPdf={handleDownloadPdf}
-                onQuiltWidthChange={handleQuiltWidthChange}
-                onQuiltHeightChange={handleQuiltHeightChange}
-                onQuiltSizePresetChange={handleQuiltSizePresetChange}
               />
 
               {isDownloadingPdf && (

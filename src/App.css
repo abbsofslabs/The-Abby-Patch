@@ -23,19 +23,136 @@
     radial-gradient(ellipse at 70% 80%, rgba(61, 46, 38, 0.06) 0%, transparent 50%),
     linear-gradient(180deg, #f0ebe2 0%, #e5dfd4 100%);
   position: relative;
+  overflow-x: hidden;
   font-family: 'Source Sans 3', system-ui, sans-serif;
   color: var(--text);
 }
 
+.abby-patch__needle-field {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.abby-patch__needle {
+  position: absolute;
+  width: 42px;
+  height: auto;
+  color: var(--brown-mid);
+  opacity: 0.22;
+}
+
+.abby-patch__needle--left-1 {
+  left: clamp(0.5rem, 3vw, 2.5rem);
+  top: 12%;
+  transform: rotate(-8deg);
+}
+
+.abby-patch__needle--left-2 {
+  left: clamp(0.25rem, 1.8vw, 1.5rem);
+  top: 48%;
+  transform: rotate(6deg) scale(0.9);
+  opacity: 0.18;
+}
+
+.abby-patch__needle--left-3 {
+  left: clamp(1rem, 4.5vw, 3.5rem);
+  bottom: 10%;
+  transform: rotate(-14deg) scale(0.85);
+  opacity: 0.16;
+}
+
+.abby-patch__needle--right-1 {
+  right: clamp(0.5rem, 3vw, 2.5rem);
+  top: 18%;
+  transform: rotate(10deg) scaleX(-1);
+}
+
+.abby-patch__needle--right-2 {
+  right: clamp(0.25rem, 2vw, 1.75rem);
+  top: 52%;
+  transform: rotate(-5deg) scaleX(-1) scale(0.92);
+  opacity: 0.18;
+}
+
+.abby-patch__needle--right-3 {
+  right: clamp(1rem, 4vw, 3rem);
+  bottom: 14%;
+  transform: rotate(12deg) scaleX(-1) scale(0.88);
+  opacity: 0.16;
+}
+
+@media (max-width: 1100px) {
+  .abby-patch__needle-field {
+    display: none;
+  }
+}
+
 .abby-patch__main {
   width: 100%;
-  max-width: 700px;
+  max-width: 1100px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1.25rem;
   position: relative;
   z-index: 1;
+}
+
+.abby-patch__tabpanel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.abby-patch__workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.abby-patch__sidebar,
+.abby-patch__canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+@media (min-width: 769px) {
+  .abby-patch__workspace {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+
+  .abby-patch__sidebar {
+    flex: 0 0 300px;
+    max-width: 340px;
+  }
+
+  .abby-patch__canvas {
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+  }
+
+  .abby-patch__tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .abby-patch__tool-actions {
+    width: 100%;
+    align-items: center;
+  }
+
+  .abby-patch__grid {
+    width: min(100%, 520px);
+  }
 }
 
 .abby-patch__landing {
@@ -47,6 +164,8 @@
   justify-content: center;
   gap: 3rem 4rem;
   padding: 2rem 1.5rem;
+  position: relative;
+  z-index: 1;
 }
 
 .abby-patch__landing-content {
@@ -251,10 +370,38 @@
 
 .abby-patch__controls {
   display: flex;
-  gap: 1.25rem;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.abby-patch__setup {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.abby-patch__setup-dimensions {
+  display: flex;
   flex-wrap: wrap;
+  gap: 1.25rem;
   justify-content: center;
   align-items: flex-end;
+}
+
+.abby-patch__grid-summary {
+  margin: 0;
+  text-align: center;
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--brown);
+  line-height: 1.5;
+  padding: 0.85rem 1rem;
+  background: rgba(141, 160, 128, 0.14);
+  border-radius: 10px;
+  border: 1px solid rgba(141, 160, 128, 0.35);
 }
 
 .abby-patch__input-group {
@@ -628,7 +775,9 @@
 
 .abby-patch__grid-wrapper {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
 }
 
 .abby-patch__repeat {

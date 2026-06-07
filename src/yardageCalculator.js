@@ -23,6 +23,29 @@ export function formatDimension(value) {
   return rounded.toFixed(2).replace(/\.?0+$/, '');
 }
 
+export function calculateGridDimensions(targetWidth, targetHeight, blockSize) {
+  const width = Number(targetWidth);
+  const height = Number(targetHeight);
+  const block = Number(blockSize);
+
+  if (!width || !height || !block || width <= 0 || height <= 0 || block <= 0) {
+    return null;
+  }
+
+  let columns = Math.round(width / block);
+  let rows = Math.round(height / block);
+  columns = Math.max(1, Math.min(MAX_GRID_SIZE, columns));
+  rows = Math.max(1, Math.min(MAX_GRID_SIZE, rows));
+
+  return {
+    rows,
+    columns,
+    blockSize: block,
+    finishedWidth: columns * block,
+    finishedHeight: rows * block,
+  };
+}
+
 export function calculateBlockSize(quiltWidth, quiltHeight, columns, rows) {
   const width = Number(quiltWidth);
   const height = Number(quiltHeight);

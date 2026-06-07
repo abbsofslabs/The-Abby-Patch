@@ -1,76 +1,21 @@
 import { memo } from 'react';
 import { formatDimension, formatYards } from '../yardageCalculator';
-import { QUILT_SIZE_PRESETS } from '../constants';
 
-function YardagePanel({
-  grid,
-  quiltWidth,
-  quiltHeight,
-  quiltSizePreset,
-  yardageReport,
-  isDownloadingPdf,
-  onDownloadPdf,
-  onQuiltWidthChange,
-  onQuiltHeightChange,
-  onQuiltSizePresetChange,
-}) {
+function YardagePanel({ grid, yardageReport, isDownloadingPdf, onDownloadPdf }) {
   return (
     <section className="abby-patch__yardage abby-patch__panel" aria-label="Yardage calculator">
       <h2 className="abby-patch__section-title">Yardage calculator — front &amp; back combined</h2>
 
-      <div className="abby-patch__yardage-size">
-        <div className="abby-patch__input-group abby-patch__input-group--full">
-          <label htmlFor="quilt-size-preset">Quilt size</label>
-          <select
-            id="quilt-size-preset"
-            className="abby-patch__select"
-            value={quiltSizePreset}
-            onChange={onQuiltSizePresetChange}
-          >
-            {QUILT_SIZE_PRESETS.map(({ id, label }) => (
-              <option key={id} value={id}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="abby-patch__yardage-inputs">
-          <div className="abby-patch__input-group">
-            <label htmlFor="quilt-width">Quilt width (in)</label>
-            <input
-              id="quilt-width"
-              type="number"
-              min="1"
-              step="0.25"
-              value={quiltWidth}
-              onChange={onQuiltWidthChange}
-            />
-          </div>
-          <div className="abby-patch__input-group">
-            <label htmlFor="quilt-height">Quilt height (in)</label>
-            <input
-              id="quilt-height"
-              type="number"
-              min="1"
-              step="0.25"
-              value={quiltHeight}
-              onChange={onQuiltHeightChange}
-            />
-          </div>
-        </div>
-      </div>
-
-      {yardageReport?.blockSize && (
+      {yardageReport?.blockSize && grid && (
         <p className="abby-patch__block-size">
-          Block size:{' '}
+          Finished quilt:{' '}
           <strong>
-            {formatDimension(yardageReport.blockSize.width)}&Prime; &times;{' '}
-            {formatDimension(yardageReport.blockSize.height)}&Prime;
+            {formatDimension(grid.finishedWidth)}&Prime; &times;{' '}
+            {formatDimension(grid.finishedHeight)}&Prime;
           </strong>
           <span className="abby-patch__block-size-detail">
-            ({formatDimension(quiltWidth)}&Prime; &divide; {grid.columns} columns &middot;{' '}
-            {formatDimension(quiltHeight)}&Prime; &divide; {grid.rows} rows)
+            ({grid.columns}&times;{grid.rows} blocks at{' '}
+            {formatDimension(yardageReport.blockSize.width)}&Prime; each)
           </span>
         </p>
       )}
