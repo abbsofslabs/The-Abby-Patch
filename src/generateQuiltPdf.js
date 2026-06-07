@@ -9,11 +9,13 @@ import {
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
-const MARGIN = 40;
+const MARGIN = 52;
+const BOTTOM_MARGIN = 52;
 const MIN_FONT = 16;
 const TITLE_FONT = 24;
 const SECTION_FONT = 22;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+const RIGHT_EDGE = PAGE_WIDTH - MARGIN;
 const ROW_HEIGHT = 24;
 const SWATCH_SIZE = 14;
 const CUTTING_SWATCH_SIZE = 18;
@@ -116,7 +118,7 @@ function createPdfWriter(logoData) {
       drawHeader();
     },
     ensureSpace: (height) => {
-      if (y + height > PAGE_HEIGHT - MARGIN) {
+      if (y + height > PAGE_HEIGHT - BOTTOM_MARGIN) {
         pdf.addPage();
         drawHeader();
       }
@@ -124,7 +126,20 @@ function createPdfWriter(logoData) {
   };
 }
 
-function drawSwatchLabel(pdf, x, y, color, label, swatchSize = SWATCH_SIZE) {
+function writeWrappedText(ctx, text, x, maxWidth, lineHeight = MIN_FONT + 6) {
+  const { pdf } = ctx;
+  const lines = pdf.splitTextToSize(text, maxWidth);
+
+  lines.forEach((line) => {
+    ctx.ensureSpace(lineHeight);
+    pdf.text(line, x, ctx.getY());
+    ctx.addY(lineHeight);
+  });
+
+  return lines.length * lineHeight;
+}
+
+function drawSwatchLabel(pdf, x, y, color, label, swatchSize = SWATCH_SIZE, maxLabelWidth = 110) {
   const { r, g, b } = hexToRgb(color);
   const swatchY = y - swatchSize + 4;
 
@@ -132,7 +147,11 @@ function drawSwatchLabel(pdf, x, y, color, label, swatchSize = SWATCH_SIZE) {
   pdf.rect(x, swatchY, swatchSize, swatchSize, 'F');
   pdf.setDrawColor(61, 46, 38);
   pdf.rect(x, swatchY, swatchSize, swatchSize, 'S');
-  pdf.text(label, x + swatchSize + 10, y);
+
+  const labelLines = pdf.splitTextToSize(label, maxLabelWidth);
+  labelLines.forEach((line, lineIndex) => {
+    pdf.text(line, x + swatchSize + 10, y + lineIndex * (MIN_FONT + 2));
+  });
 }
 
 function formatCuttingInstruction(count, cutWidth, cutHeight) {
@@ -147,9 +166,10 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, get
 
   const { pdf } = ctx;
   const cutSize = getCutBlockSize(blockSize.width, blockSize.height);
-  const headerHeight = SECTION_FONT + CUTTING_FONT * 2 + CUTTING_ROW_HEIGHT * rows.length + 40;
+  const instructionX = MARGIN + 108;
+  const instructionWidth = RIGHT_EDGE - instructionX;
 
-  ctx.ensureSpace(headerHeight);
+  ctx.ensureSpace(SECTION_FONT + 80);
   ctx.addY(12);
 
   pdf.setFont('helvetica', 'bold');
@@ -159,30 +179,38 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, get
 
   pdf.setFontSize(MIN_FONT);
   pdf.setFont('helvetica', 'normal');
-  pdf.text(
-    `Finished block: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in  |  ` +
-      `Cut size includes ${formatDimension(SEAM_ALLOWANCE_PER_SIDE)} in seam allowance per side`,
+  writeWrappedText(
+    ctx,
+    `Finished block: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in. ` +
+      `Cut size includes ${formatDimension(SEAM_ALLOWANCE_PER_SIDE)} in seam allowance per side.`,
     MARGIN,
-    ctx.getY()
+    CONTENT_WIDTH,
+    MIN_FONT + 8
   );
-  ctx.addY(28);
+  ctx.addY(6);
 
   rows.forEach((row) => {
     const count = getCount(row);
-    ctx.ensureSpace(CUTTING_ROW_HEIGHT);
+    const instruction = formatCuttingInstruction(count, cutSize.width, cutSize.height);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(CUTTING_FONT);
+    const instructionLines = pdf.splitTextToSize(instruction, instructionWidth);
+    const rowHeight = Math.max(CUTTING_ROW_HEIGHT, instructionLines.length * (CUTTING_FONT + 8));
+
+    ctx.ensureSpace(rowHeight);
 
     const label = colorLabels.get(row.color.toLowerCase()) ?? 'Color';
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(CUTTING_FONT);
-    drawSwatchLabel(pdf, MARGIN, ctx.getY(), row.color, label, CUTTING_SWATCH_SIZE);
+    drawSwatchLabel(pdf, MARGIN, ctx.getY(), row.color, label, CUTTING_SWATCH_SIZE, 92);
 
     pdf.setFont('helvetica', 'normal');
-    pdf.text(
-      formatCuttingInstruction(count, cutSize.width, cutSize.height),
-      MARGIN + 100,
-      ctx.getY()
-    );
-    ctx.addY(CUTTING_ROW_HEIGHT);
+    pdf.setFontSize(CUTTING_FONT);
+    instructionLines.forEach((line, lineIndex) => {
+      pdf.text(line, instructionX, ctx.getY() + lineIndex * (CUTTING_FONT + 6));
+    });
+    ctx.addY(rowHeight);
   });
 
   ctx.addY(8);
@@ -208,7 +236,7 @@ function drawSectionHeading(ctx, title) {
 async function drawGridImage(ctx, gridElement, maxHeight) {
   const canvas = await captureGrid(gridElement);
   const { width, height } = fitImageDimensions(canvas, CONTENT_WIDTH, maxHeight);
-  const remaining = PAGE_HEIGHT - MARGIN - ctx.getY();
+  const remaining = PAGE_HEIGHT - BOTTOM_MARGIN - ctx.getY();
 
   if (height > remaining) {
     ctx.newPage();
@@ -243,8 +271,8 @@ function drawSideYardageTable(ctx, report, colorLabels, emptyMessage) {
 
   const columns = {
     color: MARGIN,
-    blocks: MARGIN + 180,
-    yards: MARGIN + 280,
+    blocks: MARGIN + 200,
+    yards: MARGIN + 300,
   };
 
   pdf.setFont('helvetica', 'bold');
@@ -255,9 +283,9 @@ function drawSideYardageTable(ctx, report, colorLabels, emptyMessage) {
 
   pdf.setFont('helvetica', 'normal');
   report.colors.forEach((row) => {
-    ctx.ensureSpace(ROW_HEIGHT);
+    ctx.ensureSpace(ROW_HEIGHT + 4);
     const label = colorLabels.get(row.color.toLowerCase()) ?? 'Color';
-    drawSwatchLabel(pdf, columns.color, ctx.getY(), row.color, label);
+    drawSwatchLabel(pdf, columns.color, ctx.getY(), row.color, label, SWATCH_SIZE, 170);
     pdf.text(String(row.count), columns.blocks, ctx.getY());
     pdf.text(formatYards(row.yards), columns.yards, ctx.getY());
     ctx.addY(ROW_HEIGHT);
@@ -272,8 +300,9 @@ function drawSideYardageTable(ctx, report, colorLabels, emptyMessage) {
 
 function drawCombinedYardageTable(ctx, combinedReport, colorLabels) {
   const { pdf } = ctx;
-  const tableHeight = ROW_HEIGHT * (combinedReport.colors.length + 4) + 20;
-  ctx.ensureSpace(tableHeight + SECTION_FONT);
+
+  ctx.ensureSpace(SECTION_FONT + ROW_HEIGHT * 2);
+  ctx.addY(8);
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(SECTION_FONT);
@@ -283,10 +312,10 @@ function drawCombinedYardageTable(ctx, combinedReport, colorLabels) {
   pdf.setFontSize(MIN_FONT);
   const columns = {
     color: MARGIN,
-    front: MARGIN + 130,
-    back: MARGIN + 190,
-    total: MARGIN + 250,
-    yards: MARGIN + 310,
+    front: MARGIN + 168,
+    back: MARGIN + 228,
+    total: MARGIN + 288,
+    yards: MARGIN + 348,
   };
 
   pdf.setFont('helvetica', 'bold');
@@ -299,9 +328,9 @@ function drawCombinedYardageTable(ctx, combinedReport, colorLabels) {
 
   pdf.setFont('helvetica', 'normal');
   combinedReport.colors.forEach((row) => {
-    ctx.ensureSpace(ROW_HEIGHT);
+    ctx.ensureSpace(ROW_HEIGHT + 4);
     const label = colorLabels.get(row.color.toLowerCase()) ?? 'Color';
-    drawSwatchLabel(pdf, columns.color, ctx.getY(), row.color, label);
+    drawSwatchLabel(pdf, columns.color, ctx.getY(), row.color, label, SWATCH_SIZE, 140);
     pdf.text(String(row.frontCount), columns.front, ctx.getY());
     pdf.text(String(row.backCount), columns.back, ctx.getY());
     pdf.text(String(row.totalCount), columns.total, ctx.getY());
@@ -309,18 +338,21 @@ function drawCombinedYardageTable(ctx, combinedReport, colorLabels) {
     ctx.addY(ROW_HEIGHT);
   });
 
-  ctx.ensureSpace(ROW_HEIGHT * 3);
+  ctx.ensureSpace(ROW_HEIGHT);
+  pdf.setFont('helvetica', 'bold');
   pdf.text('Front only', columns.color, ctx.getY());
   pdf.text(formatYards(combinedReport.frontTotalYards), columns.yards, ctx.getY());
   ctx.addY(ROW_HEIGHT);
 
+  ctx.ensureSpace(ROW_HEIGHT);
   pdf.text('Back only', columns.color, ctx.getY());
   pdf.text(formatYards(combinedReport.backTotalYards), columns.yards, ctx.getY());
   ctx.addY(ROW_HEIGHT);
 
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Combined total fabric (front + back)', columns.color, ctx.getY());
+  ctx.ensureSpace(ROW_HEIGHT + 8);
+  pdf.text('Combined total', columns.color, ctx.getY());
   pdf.text(formatYards(combinedReport.totalYards), columns.yards, ctx.getY());
+  ctx.addY(ROW_HEIGHT + 20);
 }
 
 export async function generateQuiltPdf({
@@ -376,6 +408,7 @@ export async function generateQuiltPdf({
     (row) => row.count
   );
 
+  ctx.ensureSpace(SECTION_FONT + CUTTING_ROW_HEIGHT * 2);
   drawCombinedYardageTable(ctx, combinedReport, colorLabels);
   drawCuttingGuide(
     ctx,

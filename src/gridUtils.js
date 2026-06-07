@@ -27,17 +27,27 @@ export function getSelectionBounds(indices, columns) {
   };
 }
 
+export function getMotifBounds(cellColors, selectedIndices, columns) {
+  const coloredIndices = selectedIndices.filter((index) => cellColors[index] != null);
+
+  if (!coloredIndices.length) {
+    return null;
+  }
+
+  return getSelectionBounds(coloredIndices, columns);
+}
+
 export function applyTileToSelection(cellColors, columns, selectedIndices) {
   if (!selectedIndices.length) {
-    return cellColors;
+    return { cellColors, error: 'no_selection' };
   }
 
-  const bounds = getSelectionBounds(selectedIndices, columns);
-  if (!bounds) {
-    return cellColors;
+  const motifBounds = getMotifBounds(cellColors, selectedIndices, columns);
+  if (!motifBounds) {
+    return { cellColors, error: 'no_motif' };
   }
 
-  const { minRow, minCol, width, height } = bounds;
+  const { minRow, minCol, width, height } = motifBounds;
   const pattern = Array.from({ length: height * width }, (_, i) => {
     const rowOffset = Math.floor(i / width);
     const colOffset = i % width;
@@ -54,7 +64,7 @@ export function applyTileToSelection(cellColors, columns, selectedIndices) {
     next[index] = pattern[rowOffset * width + colOffset];
   });
 
-  return next;
+  return { cellColors: next, error: null };
 }
 
 export function addBlockSelection(selectedBlocks, index) {

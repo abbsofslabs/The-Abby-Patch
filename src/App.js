@@ -141,15 +141,26 @@ function App() {
         return prev;
       }
 
+      const result = applyTileToSelection(
+        currentSide.cellColors,
+        grid.columns,
+        currentSide.selectedBlocks
+      );
+
+      if (result.error === 'no_motif') {
+        window.alert('Color your motif inside the selected blocks before tiling.');
+        return prev;
+      }
+
+      if (result.error) {
+        return prev;
+      }
+
       return {
         ...prev,
         [activeSide]: {
           ...currentSide,
-          cellColors: applyTileToSelection(
-            currentSide.cellColors,
-            grid.columns,
-            currentSide.selectedBlocks
-          ),
+          cellColors: result.cellColors,
         },
       };
     });
@@ -718,6 +729,45 @@ function App() {
                   </ul>
                 </section>
               )}
+
+              <section className="abby-patch__repeat abby-patch__panel" aria-label="Repeat pattern">
+                <h2 className="abby-patch__section-title">Repeat pattern — {activeSideLabel}</h2>
+                <p className="abby-patch__repeat-desc">
+                  Select blocks, color a small motif in one corner of the selection, then tile to
+                  fill the rest.
+                </p>
+                <div className="abby-patch__repeat-controls">
+                  <button
+                    type="button"
+                    className={`abby-patch__tool-button ${selectionMode ? 'abby-patch__tool-button--active' : ''}`}
+                    onClick={handleToggleSelectionMode}
+                    aria-pressed={selectionMode}
+                  >
+                    Select blocks
+                  </button>
+                  <button
+                    type="button"
+                    className="abby-patch__tool-button"
+                    onClick={handleClearSelection}
+                    disabled={!selectedBlocks.length}
+                  >
+                    Clear selection
+                  </button>
+                  <button
+                    type="button"
+                    className="abby-patch__button abby-patch__button--tile"
+                    onClick={handleTilePattern}
+                    disabled={!selectedBlocks.length}
+                  >
+                    Tile pattern
+                  </button>
+                </div>
+                <p className="abby-patch__repeat-hint">
+                  {selectedBlocks.length > 0
+                    ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — pattern tiles within this area only.`
+                    : 'Turn on Select blocks, then click or drag to paint your repeat area.'}
+                </p>
+              </section>
                 </div>
 
                 <div className="abby-patch__canvas">
@@ -739,46 +789,7 @@ function App() {
                 />
               </section>
 
-              <div className="abby-patch__repeat-yardage">
-                <section className="abby-patch__repeat abby-patch__panel" aria-label="Repeat pattern">
-                  <h2 className="abby-patch__section-title">Repeat pattern — {activeSideLabel}</h2>
-                  <p className="abby-patch__repeat-desc">
-                    Turn on Select blocks and drag across the grid like a brush. Color your motif,
-                    then tile within the selection only.
-                  </p>
-                  <div className="abby-patch__repeat-controls">
-                    <button
-                      type="button"
-                      className={`abby-patch__tool-button ${selectionMode ? 'abby-patch__tool-button--active' : ''}`}
-                      onClick={handleToggleSelectionMode}
-                      aria-pressed={selectionMode}
-                    >
-                      Select blocks
-                    </button>
-                    <button
-                      type="button"
-                      className="abby-patch__tool-button"
-                      onClick={handleClearSelection}
-                      disabled={!selectedBlocks.length}
-                    >
-                      Clear selection
-                    </button>
-                    <button
-                      type="button"
-                      className="abby-patch__button abby-patch__button--tile"
-                      onClick={handleTilePattern}
-                      disabled={!selectedBlocks.length}
-                    >
-                      Tile pattern
-                    </button>
-                  </div>
-                  <p className="abby-patch__repeat-hint">
-                    {selectedBlocks.length > 0
-                      ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — pattern tiles within this area only.`
-                      : 'Turn on Select blocks, then click or drag to paint your repeat area.'}
-                  </p>
-                </section>
-
+              <div className="abby-patch__yardage-panel-wrap">
                 <YardagePanel
                   grid={grid}
                   yardageReport={yardageReport}
