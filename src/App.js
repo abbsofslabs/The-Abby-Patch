@@ -11,7 +11,7 @@ import QuiltGrid from './components/QuiltGrid';
 import YardagePanel from './components/YardagePanel';
 import { CREAM, FABRIC_PALETTE, QUILT_SIZE_PRESETS, SIDES } from './constants';
 import { generateQuiltPdf } from './generateQuiltPdf';
-import { addBlockSelection, applyTileToSelection } from './gridUtils';
+import { addBlockSelection, applyTileFromSelection } from './gridUtils';
 import {
   buildCombinedYardageReport,
   buildYardageReport,
@@ -137,18 +137,19 @@ function App() {
     setSides((prev) => {
       const currentSide = prev[activeSide];
       if (!currentSide.selectedBlocks.length) {
-        window.alert('Select blocks on the grid first, then tile the pattern within them.');
+        window.alert('Select the blocks that form your pattern first.');
         return prev;
       }
 
-      const result = applyTileToSelection(
+      const result = applyTileFromSelection(
         currentSide.cellColors,
+        grid.rows,
         grid.columns,
         currentSide.selectedBlocks
       );
 
       if (result.error === 'no_motif') {
-        window.alert('Color your motif inside the selected blocks before tiling.');
+        window.alert('Color the selected pattern blocks before tiling.');
         return prev;
       }
 
@@ -733,8 +734,8 @@ function App() {
               <section className="abby-patch__repeat abby-patch__panel" aria-label="Repeat pattern">
                 <h2 className="abby-patch__section-title">Repeat pattern — {activeSideLabel}</h2>
                 <p className="abby-patch__repeat-desc">
-                  Select blocks, color a small motif in one corner of the selection, then tile to
-                  fill the rest.
+                  Select the blocks that make up your pattern, color them, then tile across the
+                  whole quilt.
                 </p>
                 <div className="abby-patch__repeat-controls">
                   <button
@@ -764,8 +765,8 @@ function App() {
                 </div>
                 <p className="abby-patch__repeat-hint">
                   {selectedBlocks.length > 0
-                    ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — pattern tiles within this area only.`
-                    : 'Turn on Select blocks, then click or drag to paint your repeat area.'}
+                    ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected as your pattern — tile fills the whole grid.`
+                    : 'Turn on Select blocks, then click or drag to choose your pattern.'}
                 </p>
               </section>
                 </div>

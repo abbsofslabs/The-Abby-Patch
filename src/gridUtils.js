@@ -27,27 +27,17 @@ export function getSelectionBounds(indices, columns) {
   };
 }
 
-export function getMotifBounds(cellColors, selectedIndices, columns) {
-  const coloredIndices = selectedIndices.filter((index) => cellColors[index] != null);
-
-  if (!coloredIndices.length) {
-    return null;
-  }
-
-  return getSelectionBounds(coloredIndices, columns);
-}
-
-export function applyTileToSelection(cellColors, columns, selectedIndices) {
+export function applyTileFromSelection(cellColors, rows, columns, selectedIndices) {
   if (!selectedIndices.length) {
     return { cellColors, error: 'no_selection' };
   }
 
-  const motifBounds = getMotifBounds(cellColors, selectedIndices, columns);
-  if (!motifBounds) {
-    return { cellColors, error: 'no_motif' };
+  const bounds = getSelectionBounds(selectedIndices, columns);
+  if (!bounds) {
+    return { cellColors, error: 'no_selection' };
   }
 
-  const { minRow, minCol, width, height } = motifBounds;
+  const { minRow, minCol, width, height } = bounds;
   const pattern = Array.from({ length: height * width }, (_, i) => {
     const rowOffset = Math.floor(i / width);
     const colOffset = i % width;
@@ -55,14 +45,18 @@ export function applyTileToSelection(cellColors, columns, selectedIndices) {
     return cellColors[index] ?? null;
   });
 
+  if (!pattern.some((color) => color != null)) {
+    return { cellColors, error: 'no_motif' };
+  }
+
   const next = [...cellColors];
-  selectedIndices.forEach((index) => {
+  for (let index = 0; index < rows * columns; index += 1) {
     const row = Math.floor(index / columns);
     const col = index % columns;
     const rowOffset = ((row - minRow) % height + height) % height;
     const colOffset = ((col - minCol) % width + width) % width;
     next[index] = pattern[rowOffset * width + colOffset];
-  });
+  }
 
   return { cellColors: next, error: null };
 }
