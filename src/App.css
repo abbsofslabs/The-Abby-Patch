@@ -23,7 +23,6 @@
     radial-gradient(ellipse at 70% 80%, rgba(61, 46, 38, 0.06) 0%, transparent 50%),
     linear-gradient(180deg, #f0ebe2 0%, #e5dfd4 100%);
   position: relative;
-  overflow-x: hidden;
   font-family: 'Source Sans 3', system-ui, sans-serif;
   color: var(--text);
 }
@@ -36,54 +35,26 @@
 }
 
 .abby-patch__needle {
-  position: absolute;
-  width: 42px;
+  position: fixed;
+  width: 64px;
+  opacity: 0.5;
+}
+
+.abby-patch__needle svg {
+  display: block;
+  width: 100%;
   height: auto;
-  color: var(--brown-mid);
-  opacity: 0.22;
 }
 
-.abby-patch__needle--left-1 {
-  left: clamp(0.5rem, 3vw, 2.5rem);
-  top: 12%;
-  transform: rotate(-8deg);
+.abby-patch__needle--left {
+  left: max(0.75rem, calc((100vw - 1100px) / 2 * 0.42));
 }
 
-.abby-patch__needle--left-2 {
-  left: clamp(0.25rem, 1.8vw, 1.5rem);
-  top: 48%;
-  transform: rotate(6deg) scale(0.9);
-  opacity: 0.18;
+.abby-patch__needle--right {
+  right: max(0.75rem, calc((100vw - 1100px) / 2 * 0.42));
 }
 
-.abby-patch__needle--left-3 {
-  left: clamp(1rem, 4.5vw, 3.5rem);
-  bottom: 10%;
-  transform: rotate(-14deg) scale(0.85);
-  opacity: 0.16;
-}
-
-.abby-patch__needle--right-1 {
-  right: clamp(0.5rem, 3vw, 2.5rem);
-  top: 18%;
-  transform: rotate(10deg) scaleX(-1);
-}
-
-.abby-patch__needle--right-2 {
-  right: clamp(0.25rem, 2vw, 1.75rem);
-  top: 52%;
-  transform: rotate(-5deg) scaleX(-1) scale(0.92);
-  opacity: 0.18;
-}
-
-.abby-patch__needle--right-3 {
-  right: clamp(1rem, 4vw, 3rem);
-  bottom: 14%;
-  transform: rotate(12deg) scaleX(-1) scale(0.88);
-  opacity: 0.16;
-}
-
-@media (max-width: 1100px) {
+@media (max-width: 640px) {
   .abby-patch__needle-field {
     display: none;
   }
@@ -137,7 +108,22 @@
   .abby-patch__canvas {
     flex: 1;
     min-width: 0;
-    align-items: center;
+    align-items: stretch;
+  }
+
+  .abby-patch__repeat-yardage {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .abby-patch__repeat-yardage .abby-patch__repeat {
+    flex: 0 0 280px;
+    max-width: 320px;
+  }
+
+  .abby-patch__repeat-yardage .abby-patch__yardage {
+    flex: 1;
+    min-width: 0;
   }
 
   .abby-patch__tools {
@@ -780,6 +766,13 @@
   width: 100%;
 }
 
+.abby-patch__repeat-yardage {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
 .abby-patch__repeat {
   display: flex;
   flex-direction: column;
@@ -788,7 +781,7 @@
 
 .abby-patch__repeat-desc {
   margin: 0;
-  text-align: center;
+  text-align: left;
   font-size: 0.9rem;
   color: var(--brown-mid);
   line-height: 1.45;
@@ -797,8 +790,8 @@
 .abby-patch__repeat-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.25rem;
-  justify-content: center;
+  gap: 1rem;
+  justify-content: flex-start;
   align-items: flex-end;
 }
 
@@ -812,13 +805,34 @@
   font-style: italic;
   font-family: 'Libre Baskerville', Georgia, serif;
   color: var(--brown-mid);
-  text-align: center;
+  text-align: left;
   opacity: 0.9;
 }
 
-.abby-patch__cell--repeat-region {
-  box-shadow: inset 0 0 0 2px var(--sage);
+.abby-patch__cell--selected {
+  box-shadow:
+    inset 0 0 0 2px var(--sage),
+    inset 0 0 0 4px rgba(141, 160, 128, 0.25);
   z-index: 1;
+}
+
+.abby-patch__grid--selecting {
+  cursor: crosshair;
+}
+
+.abby-patch__grid--selecting .abby-patch__cell {
+  cursor: crosshair;
+}
+
+.abby-patch__tool-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.abby-patch__tool-button:disabled:hover {
+  background: transparent;
+  border-color: rgba(61, 46, 38, 0.35);
+  color: var(--brown-mid);
 }
 
 .abby-patch__grid {

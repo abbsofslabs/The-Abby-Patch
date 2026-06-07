@@ -11,7 +11,7 @@ import QuiltGrid from './components/QuiltGrid';
 import YardagePanel from './components/YardagePanel';
 import { CREAM, FABRIC_PALETTE, QUILT_SIZE_PRESETS, SIDES } from './constants';
 import { generateQuiltPdf } from './generateQuiltPdf';
-import { applyTilePattern, clampRepeatSize } from './gridUtils';
+import { applyTileToSelection, toggleBlockSelection } from './gridUtils';
 import {
   buildCombinedYardageReport,
   buildYardageReport,
@@ -30,13 +30,12 @@ import { startStripeCheckout } from './utils/stripeCheckout';
 import { loadAndClearPatternSession, savePatternSession } from './utils/patternSession';
 import './App.css';
 
-function createSideState(rows, columns, repeatWidth = 2, repeatHeight = 2) {
+function createSideState(rows, columns) {
   const r = Math.max(1, rows);
   const c = Math.max(1, columns);
   return {
     cellColors: Array(r * c).fill(null),
-    repeatWidth: Math.min(repeatWidth, c),
-    repeatHeight: Math.min(repeatHeight, r),
+    selectedBlocks: [],
   };
 }
 
@@ -51,6 +50,7 @@ function App() {
   const [selectionSource, setSelectionSource] = useState('preset');
   const [customPickerOpen, setCustomPickerOpen] = useState(false);
   const [eraserMode, setEraserMode] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
   const [quiltWidth, setQuiltWidth] = useState(60);
   const [quiltHeight, setQuiltHeight] = useState(80);
   const [blockSize, setBlockSize] = useState(6);
@@ -67,11 +67,8 @@ function App() {
   const executePdfDownloadRef = useRef(null);
 
   const activeSideData = sides[activeSide];
-  const { cellColors, repeatWidth, repeatHeight } = activeSideData;
+  const { cellColors, selectedBlocks } = activeSideData;
   const activeSideLabel = SIDES.find((s) => s.id === activeSide)?.label ?? 'Front';
-
-  const activeRepeatWidth = grid ? clampRepeatSize(repeatWidth, grid.columns) : 1;
-  const activeRepeatHeight = grid ? clampRepeatSize(repeatHeight, grid.rows) : 1;
 
   const handleStart = useCallback(() => setHasStarted(true), []);
 
@@ -108,14 +105,9 @@ function App() {
     const { rows: r, columns: c, finishedWidth, finishedHeight, blockSize: block } =
       dimensions;
 
-    setSides((prevSides) => {
-      const activeRepeatW = prevSides[activeSide].repeatWidth;
-      const activeRepeatH = prevSides[activeSide].repeatHeight;
-      const freshSide = createSideState(r, c, activeRepeatW, activeRepeatH);
-      return {
-        front: { ...freshSide },
-        back: createSideState(r, c, activeRepeatW, activeRepeatH),
-      };
+    setSides({
+      front: createSideState(r, c),
+      back: createSideState(r, c),
     });
     setGrid({
       rows: r,
@@ -125,30 +117,51 @@ function App() {
       finishedHeight,
     });
     setEraserMode(false);
-  }, [quiltWidth, quiltHeight, blockSize, activeSide]);
+    setSelectionMode(false);
+  }, [quiltWidth, quiltHeight, blockSize]);
 
   const handleTilePattern = useCallback(() => {
     if (!grid) return;
 
     setSides((prev) => {
-      const side = prev[activeSide];
-      const rw = clampRepeatSize(side.repeatWidth, grid.columns);
-      const rh = clampRepeatSize(side.repeatHeight, grid.rows);
+      const currentSide = prev[activeSide];
+      if (!currentSide.selectedBlocks.length) {
+        window.alert('Select blocks on the grid first, then tile the pattern within them.');
+        return prev;
+      }
+
       return {
         ...prev,
         [activeSide]: {
-          ...side,
-          repeatWidth: rw,
-          repeatHeight: rh,
-          cellColors: applyTilePattern(side.cellColors, grid.rows, grid.columns, rw, rh),
+          ...currentSide,
+          cellColors: applyTileToSelection(
+            currentSide.cellColors,
+            grid.columns,
+            currentSide.selectedBlocks
+          ),
         },
       };
     });
     setEraserMode(false);
+    setSelectionMode(false);
   }, [activeSide, grid]);
 
   const handleCellClick = useCallback(
     (index) => {
+      if (selectionMode) {
+        setSides((prev) => {
+          const side = prev[activeSide];
+          return {
+            ...prev,
+            [activeSide]: {
+              ...side,
+              selectedBlocks: toggleBlockSelection(side.selectedBlocks, index),
+            },
+          };
+        });
+        return;
+      }
+
       setSides((prev) => {
         const side = prev[activeSide];
         const next = [...side.cellColors];
@@ -159,7 +172,7 @@ function App() {
         };
       });
     },
-    [activeSide, eraserMode, selectedColor]
+    [activeSide, eraserMode, selectedColor, selectionMode]
   );
 
   const handleClearAll = useCallback(() => {
@@ -175,31 +188,30 @@ function App() {
     setEraserMode(false);
   }, [activeSide, grid]);
 
-  const handleRepeatWidthChange = useCallback(
-    (event) => {
-      const value = event.target.value;
-      setSides((prev) => ({
-        ...prev,
-        [activeSide]: { ...prev[activeSide], repeatWidth: value },
-      }));
-    },
-    [activeSide]
-  );
-
-  const handleRepeatHeightChange = useCallback(
-    (event) => {
-      const value = event.target.value;
-      setSides((prev) => ({
-        ...prev,
-        [activeSide]: { ...prev[activeSide], repeatHeight: value },
-      }));
-    },
-    [activeSide]
-  );
-
   const handleToggleEraser = useCallback(() => {
-    setEraserMode((prev) => !prev);
+    setEraserMode((prev) => {
+      if (!prev) {
+        setSelectionMode(false);
+      }
+      return !prev;
+    });
   }, []);
+
+  const handleToggleSelectionMode = useCallback(() => {
+    setSelectionMode((prev) => {
+      if (!prev) {
+        setEraserMode(false);
+      }
+      return !prev;
+    });
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSides((prev) => ({
+      ...prev,
+      [activeSide]: { ...prev[activeSide], selectedBlocks: [] },
+    }));
+  }, [activeSide]);
 
   const handleQuiltWidthChange = useCallback((event) => {
     setQuiltWidth(event.target.value);
@@ -648,48 +660,6 @@ function App() {
                   </ul>
                 </section>
               )}
-
-              <section className="abby-patch__repeat abby-patch__panel" aria-label="Repeat pattern">
-                <h2 className="abby-patch__section-title">Repeat pattern — {activeSideLabel}</h2>
-                <p className="abby-patch__repeat-desc">
-                  Color the top-left section, then tile it across the whole grid.
-                </p>
-                <div className="abby-patch__repeat-controls">
-                  <div className="abby-patch__input-group">
-                    <label htmlFor="repeat-width">Repeat width (cells)</label>
-                    <input
-                      id="repeat-width"
-                      type="number"
-                      min="1"
-                      max={grid.columns}
-                      value={repeatWidth}
-                      onChange={handleRepeatWidthChange}
-                    />
-                  </div>
-                  <div className="abby-patch__input-group">
-                    <label htmlFor="repeat-height">Repeat height (cells)</label>
-                    <input
-                      id="repeat-height"
-                      type="number"
-                      min="1"
-                      max={grid.rows}
-                      value={repeatHeight}
-                      onChange={handleRepeatHeightChange}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="abby-patch__button abby-patch__button--tile"
-                    onClick={handleTilePattern}
-                  >
-                    Tile pattern
-                  </button>
-                </div>
-                <p className="abby-patch__repeat-hint">
-                  Highlighted cells ({activeRepeatWidth}&times;{activeRepeatHeight}) are the
-                  section that will repeat.
-                </p>
-              </section>
                 </div>
 
                 <div className="abby-patch__canvas">
@@ -701,23 +671,64 @@ function App() {
                   rows={grid.rows}
                   columns={grid.columns}
                   cellColors={cellColors}
-                  repeatWidth={activeRepeatWidth}
-                  repeatHeight={activeRepeatHeight}
+                  selectedBlocks={selectedBlocks}
                   suppressRepeatHighlight={suppressRepeatHighlight}
                   eraserMode={eraserMode}
+                  selectionMode={selectionMode}
                   sideLabel={activeSideLabel}
                   onCellClick={handleCellClick}
                 />
               </section>
+
+              <div className="abby-patch__repeat-yardage">
+                <section className="abby-patch__repeat abby-patch__panel" aria-label="Repeat pattern">
+                  <h2 className="abby-patch__section-title">Repeat pattern — {activeSideLabel}</h2>
+                  <p className="abby-patch__repeat-desc">
+                    Select blocks on the grid, color your motif inside them, then tile within the
+                    selection only.
+                  </p>
+                  <div className="abby-patch__repeat-controls">
+                    <button
+                      type="button"
+                      className={`abby-patch__tool-button ${selectionMode ? 'abby-patch__tool-button--active' : ''}`}
+                      onClick={handleToggleSelectionMode}
+                      aria-pressed={selectionMode}
+                    >
+                      Select blocks
+                    </button>
+                    <button
+                      type="button"
+                      className="abby-patch__tool-button"
+                      onClick={handleClearSelection}
+                      disabled={!selectedBlocks.length}
+                    >
+                      Clear selection
+                    </button>
+                    <button
+                      type="button"
+                      className="abby-patch__button abby-patch__button--tile"
+                      onClick={handleTilePattern}
+                      disabled={!selectedBlocks.length}
+                    >
+                      Tile pattern
+                    </button>
+                  </div>
+                  <p className="abby-patch__repeat-hint">
+                    {selectedBlocks.length > 0
+                      ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — pattern tiles within this area only.`
+                      : 'Turn on Select blocks, then click cells to choose where the pattern repeats.'}
+                  </p>
+                </section>
+
+                <YardagePanel
+                  grid={grid}
+                  yardageReport={yardageReport}
+                  isDownloadingPdf={isDownloadingPdf}
+                  onDownloadPdf={handleDownloadPdf}
+                />
+              </div>
                 </div>
               </div>
-
-              <YardagePanel
-                grid={grid}
-                yardageReport={yardageReport}
-                isDownloadingPdf={isDownloadingPdf}
-                onDownloadPdf={handleDownloadPdf}
-              />
 
               {isDownloadingPdf && (
                 <PdfCaptureGrids
