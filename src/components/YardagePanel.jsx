@@ -1,42 +1,63 @@
 import { memo } from 'react';
 import { formatDimension, formatYards } from '../yardageCalculator';
+import { QUILT_SIZE_PRESETS } from '../constants';
 
 function YardagePanel({
   grid,
   quiltWidth,
   quiltHeight,
+  quiltSizePreset,
   yardageReport,
   isDownloadingPdf,
   onDownloadPdf,
   onQuiltWidthChange,
   onQuiltHeightChange,
+  onQuiltSizePresetChange,
 }) {
   return (
     <section className="abby-patch__yardage abby-patch__panel" aria-label="Yardage calculator">
       <h2 className="abby-patch__section-title">Yardage calculator — front &amp; back combined</h2>
 
-      <div className="abby-patch__yardage-inputs">
-        <div className="abby-patch__input-group">
-          <label htmlFor="quilt-width">Quilt width (in)</label>
-          <input
-            id="quilt-width"
-            type="number"
-            min="1"
-            step="0.25"
-            value={quiltWidth}
-            onChange={onQuiltWidthChange}
-          />
+      <div className="abby-patch__yardage-size">
+        <div className="abby-patch__input-group abby-patch__input-group--full">
+          <label htmlFor="quilt-size-preset">Quilt size</label>
+          <select
+            id="quilt-size-preset"
+            className="abby-patch__select"
+            value={quiltSizePreset}
+            onChange={onQuiltSizePresetChange}
+          >
+            {QUILT_SIZE_PRESETS.map(({ id, label }) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="abby-patch__input-group">
-          <label htmlFor="quilt-height">Quilt height (in)</label>
-          <input
-            id="quilt-height"
-            type="number"
-            min="1"
-            step="0.25"
-            value={quiltHeight}
-            onChange={onQuiltHeightChange}
-          />
+
+        <div className="abby-patch__yardage-inputs">
+          <div className="abby-patch__input-group">
+            <label htmlFor="quilt-width">Quilt width (in)</label>
+            <input
+              id="quilt-width"
+              type="number"
+              min="1"
+              step="0.25"
+              value={quiltWidth}
+              onChange={onQuiltWidthChange}
+            />
+          </div>
+          <div className="abby-patch__input-group">
+            <label htmlFor="quilt-height">Quilt height (in)</label>
+            <input
+              id="quilt-height"
+              type="number"
+              min="1"
+              step="0.25"
+              value={quiltHeight}
+              onChange={onQuiltHeightChange}
+            />
+          </div>
         </div>
       </div>
 
@@ -55,9 +76,9 @@ function YardagePanel({
       )}
 
       <p className="abby-patch__yardage-note abby-patch__yardage-note--inline">
-        Square inches include a 10% seam allowance. Yardage is based on 36&Prime; &times; 44&Prime;
-        per yard and rounded up to the nearest &frac14; yard. Fabric totals combine both quilt
-        sides.
+        Square inches are based on cut sizes with {formatDimension(0.25)}&Prime; seam allowance per
+        side. Yardage is based on 36&Prime; &times; 44&Prime; per yard and rounded up to the
+        nearest &frac14; yard. Fabric totals combine both quilt sides.
       </p>
 
       {yardageReport && yardageReport.colors.length > 0 ? (
@@ -112,8 +133,8 @@ function YardagePanel({
             </table>
           </div>
           <p className="abby-patch__yardage-note">
-            *Square inches include 10% seam allowance, calculated from combined front and back
-            block counts per color.
+            *Square inches use cut block sizes with {formatDimension(0.25)}&Prime; seam allowance
+            per side, calculated from combined front and back block counts per color.
           </p>
           <p className="abby-patch__yardage-disclaimer">
             Yardage includes seam allowance and cutting waste. Actual needs may vary slightly.

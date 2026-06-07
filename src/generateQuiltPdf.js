@@ -1,6 +1,11 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { formatYards } from './yardageCalculator';
+import {
+  formatDimension,
+  formatYards,
+  getCutBlockSize,
+  SEAM_ALLOWANCE_PER_SIDE,
+} from './yardageCalculator';
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
@@ -11,7 +16,10 @@ const SECTION_FONT = 22;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const ROW_HEIGHT = 24;
 const SWATCH_SIZE = 14;
+const CUTTING_SWATCH_SIZE = 18;
 const LOGO_SIZE = 52;
+const CUTTING_FONT = 18;
+const CUTTING_ROW_HEIGHT = 36;
 
 function hexToRgb(hex) {
   const normalized = hex.replace('#', '');
@@ -116,15 +124,68 @@ function createPdfWriter(logoData) {
   };
 }
 
-function drawSwatchLabel(pdf, x, y, color, label) {
+function drawSwatchLabel(pdf, x, y, color, label, swatchSize = SWATCH_SIZE) {
   const { r, g, b } = hexToRgb(color);
-  const swatchY = y - 12;
+  const swatchY = y - swatchSize + 4;
 
   pdf.setFillColor(r, g, b);
-  pdf.rect(x, swatchY, SWATCH_SIZE, SWATCH_SIZE, 'F');
+  pdf.rect(x, swatchY, swatchSize, swatchSize, 'F');
   pdf.setDrawColor(61, 46, 38);
-  pdf.rect(x, swatchY, SWATCH_SIZE, SWATCH_SIZE, 'S');
-  pdf.text(label, x + SWATCH_SIZE + 8, y);
+  pdf.rect(x, swatchY, swatchSize, swatchSize, 'S');
+  pdf.text(label, x + swatchSize + 10, y);
+}
+
+function formatCuttingInstruction(count, cutWidth, cutHeight) {
+  return `Cut ${count} blocks at ${formatDimension(cutWidth)} × ${formatDimension(cutHeight)} inches`;
+}
+
+function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, getCount) {
+  const rows = colors.filter((row) => getCount(row) > 0);
+  if (!rows.length || !blockSize) {
+    return;
+  }
+
+  const { pdf } = ctx;
+  const cutSize = getCutBlockSize(blockSize.width, blockSize.height);
+  const headerHeight = SECTION_FONT + CUTTING_FONT * 2 + CUTTING_ROW_HEIGHT * rows.length + 40;
+
+  ctx.ensureSpace(headerHeight);
+  ctx.addY(12);
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(SECTION_FONT);
+  pdf.text(sectionTitle, MARGIN, ctx.getY());
+  ctx.addY(SECTION_FONT + 14);
+
+  pdf.setFontSize(MIN_FONT);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(
+    `Finished block: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in  |  ` +
+      `Cut size includes ${formatDimension(SEAM_ALLOWANCE_PER_SIDE)} in seam allowance per side`,
+    MARGIN,
+    ctx.getY()
+  );
+  ctx.addY(28);
+
+  rows.forEach((row) => {
+    const count = getCount(row);
+    ctx.ensureSpace(CUTTING_ROW_HEIGHT);
+
+    const label = colorLabels.get(row.color.toLowerCase()) ?? 'Color';
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(CUTTING_FONT);
+    drawSwatchLabel(pdf, MARGIN, ctx.getY(), row.color, label, CUTTING_SWATCH_SIZE);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(
+      formatCuttingInstruction(count, cutSize.width, cutSize.height),
+      MARGIN + 100,
+      ctx.getY()
+    );
+    ctx.addY(CUTTING_ROW_HEIGHT);
+  });
+
+  ctx.addY(8);
 }
 
 async function captureGrid(gridElement) {
@@ -289,6 +350,14 @@ export async function generateQuiltPdf({
     colorLabels,
     'No fabric colors on the front side.'
   );
+  drawCuttingGuide(
+    ctx,
+    frontReport.colors,
+    colorLabels,
+    frontReport.blockSize,
+    'Front cutting guide',
+    (row) => row.count
+  );
 
   drawSectionHeading(ctx, 'Back');
   await drawGridImage(ctx, backGridElement, maxGridHeight);
@@ -298,8 +367,24 @@ export async function generateQuiltPdf({
     colorLabels,
     'No fabric colors on the back side.'
   );
+  drawCuttingGuide(
+    ctx,
+    backReport.colors,
+    colorLabels,
+    backReport.blockSize,
+    'Back cutting guide',
+    (row) => row.count
+  );
 
   drawCombinedYardageTable(ctx, combinedReport, colorLabels);
+  drawCuttingGuide(
+    ctx,
+    combinedReport.colors,
+    colorLabels,
+    combinedReport.blockSize,
+    'Combined cutting guide',
+    (row) => row.totalCount
+  );
 
   ctx.pdf.save('abby-patch-quilt-pattern.pdf');
 }

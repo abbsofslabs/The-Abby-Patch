@@ -1,8 +1,15 @@
 export const FABRIC_WIDTH = 44;
 export const YARD_LENGTH = 36;
 export const SQ_IN_PER_YARD = YARD_LENGTH * FABRIC_WIDTH;
-export const SEAM_ALLOWANCE_FACTOR = 1.1;
+export const SEAM_ALLOWANCE_PER_SIDE = 0.25;
 export const MAX_GRID_SIZE = 36;
+
+export function getCutBlockSize(blockWidth, blockHeight) {
+  return {
+    width: blockWidth + 2 * SEAM_ALLOWANCE_PER_SIDE,
+    height: blockHeight + 2 * SEAM_ALLOWANCE_PER_SIDE,
+  };
+}
 
 export function roundUpToQuarter(value) {
   return Math.ceil(value * 4) / 4;
@@ -30,24 +37,28 @@ export function calculateBlockSize(quiltWidth, quiltHeight, columns, rows) {
   };
 }
 
-export function calculateColorYardage(count, blockWidth, blockHeight) {
-  if (!count || !blockWidth || !blockHeight) {
+export function calculateColorYardage(count, finishedBlockWidth, finishedBlockHeight) {
+  if (!count || !finishedBlockWidth || !finishedBlockHeight) {
     return null;
   }
+
+  const { width: blockWidth, height: blockHeight } = getCutBlockSize(
+    finishedBlockWidth,
+    finishedBlockHeight
+  );
 
   const blocksPerRow = Math.max(1, Math.floor(FABRIC_WIDTH / blockWidth));
   const rowsNeeded = Math.ceil(count / blocksPerRow);
   const fabricLengthInches = rowsNeeded * blockHeight;
-  const layoutSqIn = FABRIC_WIDTH * fabricLengthInches;
-  const sqInWithSeam = layoutSqIn * SEAM_ALLOWANCE_FACTOR;
+  const fabricSqIn = FABRIC_WIDTH * fabricLengthInches;
 
   const widthRemainder = FABRIC_WIDTH - blocksPerRow * blockWidth;
   const hasCuttingWaste = blockWidth <= FABRIC_WIDTH && widthRemainder > 0.001;
 
-  let yards = roundUpToQuarter(sqInWithSeam / SQ_IN_PER_YARD);
+  let yards = roundUpToQuarter(fabricSqIn / SQ_IN_PER_YARD);
 
   if (hasCuttingWaste) {
-    const naiveSqIn = count * blockWidth * blockHeight * SEAM_ALLOWANCE_FACTOR;
+    const naiveSqIn = count * blockWidth * blockHeight;
     const naiveYards = roundUpToQuarter(naiveSqIn / SQ_IN_PER_YARD);
     yards = Math.max(yards, naiveYards);
     yards = roundUpToQuarter(yards);
@@ -57,7 +68,7 @@ export function calculateColorYardage(count, blockWidth, blockHeight) {
     count,
     blocksPerRow,
     rowsNeeded,
-    sqInWithSeam,
+    sqInWithSeam: fabricSqIn,
     yards,
     hasCuttingWaste,
   };

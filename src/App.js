@@ -6,7 +6,7 @@ import PdfCaptureGrids from './components/PdfCaptureGrids';
 import PaletteSwatch from './components/PaletteSwatch';
 import QuiltGrid from './components/QuiltGrid';
 import YardagePanel from './components/YardagePanel';
-import { CREAM, FABRIC_PALETTE, SIDES } from './constants';
+import { CREAM, FABRIC_PALETTE, QUILT_SIZE_PRESETS, SIDES } from './constants';
 import { generateQuiltPdf } from './generateQuiltPdf';
 import { applyTilePattern, clampRepeatSize } from './gridUtils';
 import {
@@ -41,6 +41,7 @@ function App() {
   const [eraserMode, setEraserMode] = useState(false);
   const [quiltWidth, setQuiltWidth] = useState(60);
   const [quiltHeight, setQuiltHeight] = useState(80);
+  const [quiltSizePreset, setQuiltSizePreset] = useState('custom');
   const [hasStarted, setHasStarted] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [suppressRepeatHighlight, setSuppressRepeatHighlight] = useState(false);
@@ -172,10 +173,23 @@ function App() {
 
   const handleQuiltWidthChange = useCallback((event) => {
     setQuiltWidth(event.target.value);
+    setQuiltSizePreset('custom');
   }, []);
 
   const handleQuiltHeightChange = useCallback((event) => {
     setQuiltHeight(event.target.value);
+    setQuiltSizePreset('custom');
+  }, []);
+
+  const handleQuiltSizePresetChange = useCallback((event) => {
+    const presetId = event.target.value;
+    setQuiltSizePreset(presetId);
+
+    const preset = QUILT_SIZE_PRESETS.find((item) => item.id === presetId);
+    if (preset?.width && preset?.height) {
+      setQuiltWidth(preset.width);
+      setQuiltHeight(preset.height);
+    }
   }, []);
 
   const colorLegend = useMemo(() => {
@@ -297,23 +311,6 @@ function App() {
             <p className="abby-patch__tagline">Design your quilt, one patch at a time</p>
           </header>
 
-          <div className="abby-patch__tabs" role="tablist" aria-label="Quilt side">
-            {SIDES.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                id={`tab-${id}`}
-                aria-selected={activeSide === id}
-                aria-controls={`panel-${id}`}
-                className={`abby-patch__tab ${activeSide === id ? 'abby-patch__tab--active' : ''}`}
-                onClick={() => setActiveSide(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
           <section className="abby-patch__controls abby-patch__panel">
             <div className="abby-patch__input-group">
               <label htmlFor="rows">Rows</label>
@@ -345,6 +342,24 @@ function App() {
           </section>
 
           {grid && (
+            <>
+              <div className="abby-patch__tabs" role="tablist" aria-label="Quilt side">
+                {SIDES.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    id={`tab-${id}`}
+                    aria-selected={activeSide === id}
+                    aria-controls={`panel-${id}`}
+                    className={`abby-patch__tab ${activeSide === id ? 'abby-patch__tab--active' : ''}`}
+                    onClick={() => setActiveSide(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
             <div
               role="tabpanel"
               id={`panel-${activeSide}`}
@@ -354,11 +369,12 @@ function App() {
                 <div className="abby-patch__palette-panel">
                   <h2 className="abby-patch__section-title">Choose a fabric — {activeSideLabel}</h2>
                   <div className="abby-patch__palette" role="listbox" aria-label="Fabric colors">
-                    {FABRIC_PALETTE.map(({ name, hex }) => (
+                    {FABRIC_PALETTE.map(({ name, hex, light }) => (
                       <PaletteSwatch
                         key={hex}
                         name={name}
                         hex={hex}
+                        isLight={light}
                         isSelected={
                           selectionSource === 'preset' &&
                           selectedColor.toLowerCase() === hex.toLowerCase()
@@ -506,11 +522,13 @@ function App() {
                 grid={grid}
                 quiltWidth={quiltWidth}
                 quiltHeight={quiltHeight}
+                quiltSizePreset={quiltSizePreset}
                 yardageReport={yardageReport}
                 isDownloadingPdf={isDownloadingPdf}
                 onDownloadPdf={handleDownloadPdf}
                 onQuiltWidthChange={handleQuiltWidthChange}
                 onQuiltHeightChange={handleQuiltHeightChange}
+                onQuiltSizePresetChange={handleQuiltSizePresetChange}
               />
 
               {isDownloadingPdf && (
@@ -525,6 +543,7 @@ function App() {
                 />
               )}
             </div>
+            </>
           )}
         </div>
       )}
