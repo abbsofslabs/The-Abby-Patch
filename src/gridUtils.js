@@ -57,6 +57,12 @@ export function applyTileToSelection(cellColors, columns, selectedIndices) {
   return next;
 }
 
+export function addBlockSelection(selectedBlocks, index) {
+  const set = new Set(selectedBlocks);
+  set.add(index);
+  return [...set].sort((a, b) => a - b);
+}
+
 export function toggleBlockSelection(selectedBlocks, index) {
   const set = new Set(selectedBlocks);
   if (set.has(index)) {

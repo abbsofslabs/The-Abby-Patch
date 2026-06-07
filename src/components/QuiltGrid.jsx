@@ -10,7 +10,8 @@ function QuiltGrid({
   eraserMode,
   selectionMode,
   sideLabel,
-  onCellClick,
+  onCellPointerDown,
+  onCellPointerEnter,
 }) {
   const gridStyle = useMemo(
     () => ({
@@ -40,7 +41,8 @@ function QuiltGrid({
           color={color}
           isSelected={!suppressRepeatHighlight && selectedSet.has(index)}
           sideLabel={sideLabel}
-          onCellClick={onCellClick}
+          onCellPointerDown={onCellPointerDown}
+          onCellPointerEnter={onCellPointerEnter}
         />
       ))}
     </div>

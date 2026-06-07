@@ -602,6 +602,19 @@
   );
 }
 
+.abby-patch__screen-color-button {
+  width: 100%;
+}
+
+.abby-patch__screen-color-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--brown-mid);
+  font-style: italic;
+}
+
 .abby-patch__custom-picker {
   display: flex;
   flex-direction: column;
@@ -823,17 +836,31 @@
 }
 
 .abby-patch__cell--selected {
-  box-shadow:
-    inset 0 0 0 2px var(--sage),
-    inset 0 0 0 4px rgba(141, 160, 128, 0.25);
   z-index: 1;
+}
+
+.abby-patch__cell-selection-mark {
+  position: absolute;
+  inset: 0;
+  background: rgba(141, 160, 128, 0.42);
+  border: 3px solid var(--sage-dark);
+  box-shadow:
+    inset 0 0 0 2px var(--cream),
+    0 0 0 1px rgba(61, 46, 38, 0.15);
+  pointer-events: none;
 }
 
 .abby-patch__grid--selecting {
   cursor: crosshair;
+  user-select: none;
 }
 
 .abby-patch__grid--selecting .abby-patch__cell {
+  cursor: crosshair;
+}
+
+.abby-patch__grid--eraser,
+.abby-patch__grid--eraser .abby-patch__cell {
   cursor: crosshair;
 }
 
@@ -862,12 +889,14 @@
 }
 
 .abby-patch__cell {
+  position: relative;
   background: var(--cream);
   border: 1px solid var(--cell-border);
   min-height: 0;
   padding: 0;
   cursor: pointer;
-  transition: opacity 0.1s, transform 0.1s;
+  transition: opacity 0.1s;
+  touch-action: none;
 }
 
 .abby-patch__cell:hover {

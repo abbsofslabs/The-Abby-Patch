@@ -11,7 +11,7 @@ import QuiltGrid from './components/QuiltGrid';
 import YardagePanel from './components/YardagePanel';
 import { CREAM, FABRIC_PALETTE, QUILT_SIZE_PRESETS, SIDES } from './constants';
 import { generateQuiltPdf } from './generateQuiltPdf';
-import { applyTileToSelection, toggleBlockSelection } from './gridUtils';
+import { addBlockSelection, applyTileToSelection } from './gridUtils';
 import {
   buildCombinedYardageReport,
   buildYardageReport,
@@ -28,6 +28,7 @@ import {
 } from './utils/accessStorage';
 import { startStripeCheckout } from './utils/stripeCheckout';
 import { loadAndClearPatternSession, savePatternSession } from './utils/patternSession';
+import { openScreenColorPickerWindow, subscribeToScreenColorPicker } from './utils/screenColorPicker';
 import './App.css';
 
 function createSideState(rows, columns) {
@@ -65,6 +66,7 @@ function App() {
   const frontGridRef = useRef(null);
   const backGridRef = useRef(null);
   const executePdfDownloadRef = useRef(null);
+  const isPaintingRef = useRef(false);
 
   const activeSideData = sides[activeSide];
   const { cellColors, selectedBlocks } = activeSideData;
@@ -94,6 +96,15 @@ function App() {
       return !prev;
     });
   }, []);
+
+  const handleOpenScreenColorPicker = useCallback(() => {
+    setSelectionSource('custom');
+    setCustomPickerOpen(true);
+    setEraserMode(false);
+    openScreenColorPickerWindow();
+  }, []);
+
+  useEffect(() => subscribeToScreenColorPicker(handleCustomColorChange), [handleCustomColorChange]);
 
   const handleGenerate = useCallback(() => {
     const dimensions = calculateGridDimensions(quiltWidth, quiltHeight, blockSize);
@@ -146,26 +157,33 @@ function App() {
     setSelectionMode(false);
   }, [activeSide, grid]);
 
-  const handleCellClick = useCallback(
+  const applyCellStroke = useCallback(
     (index) => {
       if (selectionMode) {
         setSides((prev) => {
           const side = prev[activeSide];
+          if (side.selectedBlocks.includes(index)) {
+            return prev;
+          }
           return {
             ...prev,
             [activeSide]: {
               ...side,
-              selectedBlocks: toggleBlockSelection(side.selectedBlocks, index),
+              selectedBlocks: addBlockSelection(side.selectedBlocks, index),
             },
           };
         });
         return;
       }
 
+      const nextColor = eraserMode ? null : selectedColor;
       setSides((prev) => {
         const side = prev[activeSide];
+        if (side.cellColors[index] === nextColor) {
+          return prev;
+        }
         const next = [...side.cellColors];
-        next[index] = eraserMode ? null : selectedColor;
+        next[index] = nextColor;
         return {
           ...prev,
           [activeSide]: { ...side, cellColors: next },
@@ -174,6 +192,35 @@ function App() {
     },
     [activeSide, eraserMode, selectedColor, selectionMode]
   );
+
+  const handleCellPointerDown = useCallback(
+    (index) => {
+      isPaintingRef.current = true;
+      applyCellStroke(index);
+    },
+    [applyCellStroke]
+  );
+
+  const handleCellPointerEnter = useCallback(
+    (index) => {
+      if (isPaintingRef.current) {
+        applyCellStroke(index);
+      }
+    },
+    [applyCellStroke]
+  );
+
+  useEffect(() => {
+    const stopPainting = () => {
+      isPaintingRef.current = false;
+    };
+    window.addEventListener('pointerup', stopPainting);
+    window.addEventListener('pointercancel', stopPainting);
+    return () => {
+      window.removeEventListener('pointerup', stopPainting);
+      window.removeEventListener('pointercancel', stopPainting);
+    };
+  }, []);
 
   const handleClearAll = useCallback(() => {
     if (!grid) return;
@@ -611,6 +658,17 @@ function App() {
                           onChange={handleCustomColorChange}
                         />
                         <span className="abby-patch__hex">{selectedColor.toUpperCase()}</span>
+                        <button
+                          type="button"
+                          className="abby-patch__tool-button abby-patch__screen-color-button"
+                          onClick={handleOpenScreenColorPicker}
+                        >
+                          Pick from screen
+                        </button>
+                        <p className="abby-patch__screen-color-hint">
+                          Opens a small window so you can sample a color from anywhere on your
+                          screen.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -634,8 +692,8 @@ function App() {
                   </button>
                   <p className="abby-patch__tool-hint">
                     {eraserMode
-                      ? 'Eraser on — click a cell to remove its color'
-                      : 'Click any cell to fill it with your selected color'}
+                      ? 'Eraser on — click or drag to remove color'
+                      : 'Click or drag to paint cells with your selected color'}
                   </p>
                 </div>
               </section>
@@ -676,7 +734,8 @@ function App() {
                   eraserMode={eraserMode}
                   selectionMode={selectionMode}
                   sideLabel={activeSideLabel}
-                  onCellClick={handleCellClick}
+                  onCellPointerDown={handleCellPointerDown}
+                  onCellPointerEnter={handleCellPointerEnter}
                 />
               </section>
 
@@ -684,8 +743,8 @@ function App() {
                 <section className="abby-patch__repeat abby-patch__panel" aria-label="Repeat pattern">
                   <h2 className="abby-patch__section-title">Repeat pattern — {activeSideLabel}</h2>
                   <p className="abby-patch__repeat-desc">
-                    Select blocks on the grid, color your motif inside them, then tile within the
-                    selection only.
+                    Turn on Select blocks and drag across the grid like a brush. Color your motif,
+                    then tile within the selection only.
                   </p>
                   <div className="abby-patch__repeat-controls">
                     <button
@@ -716,7 +775,7 @@ function App() {
                   <p className="abby-patch__repeat-hint">
                     {selectedBlocks.length > 0
                       ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — pattern tiles within this area only.`
-                      : 'Turn on Select blocks, then click cells to choose where the pattern repeats.'}
+                      : 'Turn on Select blocks, then click or drag to paint your repeat area.'}
                   </p>
                 </section>
 

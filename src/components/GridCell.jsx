@@ -1,10 +1,25 @@
 import { memo, useCallback } from 'react';
 import { CREAM } from '../constants';
 
-function GridCell({ index, color, isSelected, sideLabel, onCellClick }) {
-  const handleClick = useCallback(() => {
-    onCellClick(index);
-  }, [index, onCellClick]);
+function GridCell({
+  index,
+  color,
+  isSelected,
+  sideLabel,
+  onCellPointerDown,
+  onCellPointerEnter,
+}) {
+  const handlePointerDown = useCallback(
+    (event) => {
+      event.preventDefault();
+      onCellPointerDown(index);
+    },
+    [index, onCellPointerDown]
+  );
+
+  const handlePointerEnter = useCallback(() => {
+    onCellPointerEnter(index);
+  }, [index, onCellPointerEnter]);
 
   const backgroundColor = color || CREAM;
   const className = [
@@ -19,10 +34,13 @@ function GridCell({ index, color, isSelected, sideLabel, onCellClick }) {
       type="button"
       className={className}
       style={{ backgroundColor }}
-      onClick={handleClick}
-      aria-label={`${sideLabel} patch ${index + 1}${color ? `, color ${color}` : ', empty'}${isSelected ? ', selected' : ''}`}
+      onPointerDown={handlePointerDown}
+      onPointerEnter={handlePointerEnter}
+      aria-label={`${sideLabel} patch ${index + 1}${color ? `, color ${color}` : ', empty'}${isSelected ? ', selected for repeat' : ''}`}
       aria-pressed={isSelected}
-    />
+    >
+      {isSelected && <span className="abby-patch__cell-selection-mark" aria-hidden="true" />}
+    </button>
   );
 }
 
