@@ -32,26 +32,52 @@
   inset: 0;
   pointer-events: none;
   z-index: 0;
+  overflow: hidden;
 }
 
-.abby-patch__needle-art {
+.abby-patch__needle-dancer {
   position: fixed;
+  top: 0;
+  left: 0;
+  width: 130px;
   height: auto;
-  display: block;
   transform-origin: center center;
-  mix-blend-mode: multiply;
-  filter: sepia(0.35) saturate(0.6);
+  will-change: transform;
+  opacity: 0.42;
 }
 
-.abby-patch__needle-art--left {
-  left: max(0.5rem, calc((100vw - 1100px) / 2 * 0.38));
+.abby-patch__needle-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
 }
 
-.abby-patch__needle-art--right {
-  right: max(0.5rem, calc((100vw - 1100px) / 2 * 0.38));
+.abby-patch__needle-thread {
+  fill: none;
+  stroke: var(--brown);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.abby-patch__needle-body {
+  fill: var(--brown);
+}
+
+.abby-patch__needle-eye {
+  fill: #e8e2d6;
+  stroke: var(--brown);
+  stroke-width: 3.5;
 }
 
 @media (max-width: 640px) {
+  .abby-patch__needle-field {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
   .abby-patch__needle-field {
     display: none;
   }
