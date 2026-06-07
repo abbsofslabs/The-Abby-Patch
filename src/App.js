@@ -730,6 +730,26 @@ function App() {
                   </ul>
                 </section>
               )}
+                </div>
+
+                <div className="abby-patch__canvas">
+              <section className="abby-patch__grid-wrapper abby-patch__panel">
+                <h2 className="abby-patch__section-title abby-patch__grid-title">
+                  {activeSideLabel} side
+                </h2>
+                <QuiltGrid
+                  rows={grid.rows}
+                  columns={grid.columns}
+                  cellColors={cellColors}
+                  selectedBlocks={selectedBlocks}
+                  suppressRepeatHighlight={suppressRepeatHighlight}
+                  eraserMode={eraserMode}
+                  selectionMode={selectionMode}
+                  sideLabel={activeSideLabel}
+                  onCellPointerDown={handleCellPointerDown}
+                  onCellPointerEnter={handleCellPointerEnter}
+                />
+              </section>
 
               <section className="abby-patch__repeat abby-patch__panel" aria-label="Repeat pattern">
                 <h2 className="abby-patch__section-title">Repeat pattern — {activeSideLabel}</h2>
@@ -768,26 +788,6 @@ function App() {
                     ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected as your pattern — tile fills the whole grid.`
                     : 'Turn on Select blocks, then click or drag to choose your pattern.'}
                 </p>
-              </section>
-                </div>
-
-                <div className="abby-patch__canvas">
-              <section className="abby-patch__grid-wrapper abby-patch__panel">
-                <h2 className="abby-patch__section-title abby-patch__grid-title">
-                  {activeSideLabel} side
-                </h2>
-                <QuiltGrid
-                  rows={grid.rows}
-                  columns={grid.columns}
-                  cellColors={cellColors}
-                  selectedBlocks={selectedBlocks}
-                  suppressRepeatHighlight={suppressRepeatHighlight}
-                  eraserMode={eraserMode}
-                  selectionMode={selectionMode}
-                  sideLabel={activeSideLabel}
-                  onCellPointerDown={handleCellPointerDown}
-                  onCellPointerEnter={handleCellPointerEnter}
-                />
               </section>
 
               <div className="abby-patch__yardage-panel-wrap">
