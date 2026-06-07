@@ -16,13 +16,17 @@ function QuiltGrid({
   onCellPointerDown,
   onCellPointerEnter,
 }) {
-  const gridStyle = useMemo(
-    () => ({
+  const gridStyle = useMemo(() => {
+    const cellSize = Math.max(8, Math.min(14, Math.floor(720 / Math.max(rows, columns))));
+    const gridSize = Math.max(480, Math.min(720, Math.max(rows, columns) * cellSize));
+
+    return {
       gridTemplateRows: `repeat(${rows}, 1fr)`,
       gridTemplateColumns: `repeat(${columns}, 1fr)`,
-    }),
-    [rows, columns]
-  );
+      width: `${gridSize}px`,
+      maxWidth: 'min(90vw, 720px)',
+    };
+  }, [rows, columns]);
 
   const selectedSet = useMemo(() => new Set(selectedBlocks), [selectedBlocks]);
 

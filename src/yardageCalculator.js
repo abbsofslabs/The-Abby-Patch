@@ -4,7 +4,7 @@ export const FABRIC_WIDTH = 44;
 export const YARD_LENGTH = 36;
 export const SQ_IN_PER_YARD = YARD_LENGTH * FABRIC_WIDTH;
 export const SEAM_ALLOWANCE_PER_SIDE = 0.25;
-export const MAX_GRID_SIZE = 36;
+export const MAX_GRID_SIZE = 60;
 
 export function getCutBlockSize(blockWidth, blockHeight) {
   return {

@@ -11,9 +11,9 @@ import QuiltGrid from './components/QuiltGrid';
 import YardagePanel from './components/YardagePanel';
 import { CREAM, FABRIC_PALETTE, QUILT_SIZE_PRESETS, SIDES } from './constants';
 import { generateQuiltPdf } from './generateQuiltPdf';
-import { addBlockSelection, applyTileFromSelection } from './gridUtils';
+import { addBlockSelections, applyTileFromSelection } from './gridUtils';
 import {
-  dissolveMergesTouchingIndices,
+  getMergedCellIndices,
   mergeSelectedBlocks,
   unmergeSelectedBlocks,
 } from './mergeUtils';
@@ -177,6 +177,8 @@ function App() {
 
       const result = applyTileFromSelection(
         currentSide.cellColors,
+        currentSide.merges,
+        currentSide.cellMergeIds,
         grid.rows,
         grid.columns,
         currentSide.selectedBlocks
@@ -196,8 +198,8 @@ function App() {
         [activeSide]: {
           ...currentSide,
           cellColors: result.cellColors,
-          merges: {},
-          cellMergeIds: Array(grid.rows * grid.columns).fill(null),
+          merges: result.merges,
+          cellMergeIds: result.cellMergeIds,
         },
       };
     });
@@ -210,14 +212,19 @@ function App() {
       if (selectionMode) {
         setSides((prev) => {
           const side = prev[activeSide];
-          if (side.selectedBlocks.includes(index)) {
+          const targetIndices = getMergedCellIndices(
+            index,
+            side.merges,
+            side.cellMergeIds
+          );
+          if (targetIndices.every((cellIndex) => side.selectedBlocks.includes(cellIndex))) {
             return prev;
           }
           return {
             ...prev,
             [activeSide]: {
               ...side,
-              selectedBlocks: addBlockSelection(side.selectedBlocks, index),
+              selectedBlocks: addBlockSelections(side.selectedBlocks, targetIndices),
             },
           };
         });
@@ -227,31 +234,39 @@ function App() {
       const nextColor = eraserMode ? null : selectedColor;
       setSides((prev) => {
         const side = prev[activeSide];
-        if (side.cellColors[index] === nextColor) {
+        const targetIndices = getMergedCellIndices(
+          index,
+          side.merges,
+          side.cellMergeIds
+        );
+
+        if (targetIndices.every((cellIndex) => side.cellColors[cellIndex] === nextColor)) {
           return prev;
         }
 
+        const next = [...side.cellColors];
+        targetIndices.forEach((cellIndex) => {
+          next[cellIndex] = nextColor;
+        });
+
+        const mergeId = side.cellMergeIds[index];
         let nextMerges = side.merges;
-        let nextCellMergeIds = side.cellMergeIds;
-        if (side.cellMergeIds[index] != null) {
-          const dissolved = dissolveMergesTouchingIndices(
-            side.merges,
-            side.cellMergeIds,
-            [index]
-          );
-          nextMerges = dissolved.merges;
-          nextCellMergeIds = dissolved.cellMergeIds;
+        if (mergeId != null && side.merges[mergeId]) {
+          nextMerges = {
+            ...side.merges,
+            [mergeId]: {
+              ...side.merges[mergeId],
+              color: nextColor,
+            },
+          };
         }
 
-        const next = [...side.cellColors];
-        next[index] = nextColor;
         return {
           ...prev,
           [activeSide]: {
             ...side,
             cellColors: next,
             merges: nextMerges,
-            cellMergeIds: nextCellMergeIds,
           },
         };
       });

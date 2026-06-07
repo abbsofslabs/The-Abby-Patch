@@ -1,6 +1,8 @@
 import {
   extractCutPieces,
+  getMergedCellIndices,
   mergeSelectedBlocks,
+  tileMergesFromSelection,
   unmergeSelectedBlocks,
   validateMergeSelection,
 } from './mergeUtils';
@@ -42,6 +44,24 @@ describe('mergeUtils', () => {
     expect(unmerged.ok).toBe(true);
     expect(Object.keys(unmerged.merges)).toHaveLength(0);
     expect(unmerged.cellMergeIds[0]).toBeNull();
+  });
+
+  test('getMergedCellIndices returns all cells in a merge', () => {
+    const cellColors = Array(9).fill('#ff00ff');
+    const merged = mergeSelectedBlocks(cellColors, [0, 1, 3, 4], 3, {}, Array(9).fill(null));
+    const indices = getMergedCellIndices(4, merged.merges, merged.cellMergeIds);
+    expect(indices).toEqual([0, 1, 3, 4]);
+  });
+
+  test('tileMergesFromSelection repeats merge pattern across grid', () => {
+    const cellColors = Array(16).fill('#112233');
+    const merged = mergeSelectedBlocks(cellColors, [0, 1], 4, {}, Array(16).fill(null));
+    const tiled = tileMergesFromSelection(merged.merges, 4, 4, 0, 0, 2, 2);
+
+    expect(Object.keys(tiled.merges)).toHaveLength(4);
+    expect(tiled.cellMergeIds[0]).toBe(tiled.cellMergeIds[1]);
+    expect(tiled.cellMergeIds[2]).toBe(tiled.cellMergeIds[3]);
+    expect(tiled.cellMergeIds[8]).toBe(tiled.cellMergeIds[9]);
   });
 
   test('extractCutPieces uses outer finished dimensions for merges', () => {

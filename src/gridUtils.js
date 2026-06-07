@@ -1,3 +1,5 @@
+import { tileMergesFromSelection } from './mergeUtils';
+
 export function getSelectionBounds(indices, columns) {
   if (!indices.length) {
     return null;
@@ -27,14 +29,21 @@ export function getSelectionBounds(indices, columns) {
   };
 }
 
-export function applyTileFromSelection(cellColors, rows, columns, selectedIndices) {
+export function applyTileFromSelection(
+  cellColors,
+  merges,
+  cellMergeIds,
+  rows,
+  columns,
+  selectedIndices
+) {
   if (!selectedIndices.length) {
-    return { cellColors, error: 'no_selection' };
+    return { cellColors, merges, cellMergeIds, error: 'no_selection' };
   }
 
   const bounds = getSelectionBounds(selectedIndices, columns);
   if (!bounds) {
-    return { cellColors, error: 'no_selection' };
+    return { cellColors, merges, cellMergeIds, error: 'no_selection' };
   }
 
   const { minRow, minCol, width, height } = bounds;
@@ -46,7 +55,7 @@ export function applyTileFromSelection(cellColors, rows, columns, selectedIndice
   });
 
   if (!pattern.some((color) => color != null)) {
-    return { cellColors, error: 'no_motif' };
+    return { cellColors, merges, cellMergeIds, error: 'no_motif' };
   }
 
   const next = [...cellColors];
@@ -58,12 +67,33 @@ export function applyTileFromSelection(cellColors, rows, columns, selectedIndice
     next[index] = pattern[rowOffset * width + colOffset];
   }
 
-  return { cellColors: next, error: null };
+  const tiledMerges = tileMergesFromSelection(
+    merges,
+    rows,
+    columns,
+    minRow,
+    minCol,
+    width,
+    height
+  );
+
+  return {
+    cellColors: next,
+    merges: tiledMerges.merges,
+    cellMergeIds: tiledMerges.cellMergeIds,
+    error: null,
+  };
 }
 
 export function addBlockSelection(selectedBlocks, index) {
   const set = new Set(selectedBlocks);
   set.add(index);
+  return [...set].sort((a, b) => a - b);
+}
+
+export function addBlockSelections(selectedBlocks, indices) {
+  const set = new Set(selectedBlocks);
+  indices.forEach((index) => set.add(index));
   return [...set].sort((a, b) => a - b);
 }
 

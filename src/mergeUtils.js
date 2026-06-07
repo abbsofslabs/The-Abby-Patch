@@ -95,6 +95,24 @@ export function dissolveMerge(merges, cellMergeIds, mergeId) {
   return { merges: nextMerges, cellMergeIds: nextCellMergeIds };
 }
 
+export function getMergedCellIndices(index, merges, cellMergeIds) {
+  const mergeId = cellMergeIds[index];
+  if (mergeId == null || !merges[mergeId]) {
+    return [index];
+  }
+  return merges[mergeId].cells;
+}
+
+export function expandIndicesToWholeMerges(indices, merges, cellMergeIds) {
+  const expanded = new Set();
+  indices.forEach((index) => {
+    getMergedCellIndices(index, merges, cellMergeIds).forEach((cellIndex) => {
+      expanded.add(cellIndex);
+    });
+  });
+  return [...expanded].sort((a, b) => a - b);
+}
+
 export function dissolveMergesTouchingIndices(merges, cellMergeIds, indices) {
   const mergeIds = new Set(
     indices.map((index) => cellMergeIds[index]).filter((id) => id != null)
@@ -183,11 +201,84 @@ export function getMergeBorders(index, columns, merges, cellMergeIds) {
   };
 }
 
+export function tileMergesFromSelection(
+  merges,
+  rows,
+  columns,
+  minRow,
+  minCol,
+  patternWidth,
+  patternHeight
+) {
+  const patternMerges = Object.values(merges).filter(
+    (merge) =>
+      merge.minRow >= minRow &&
+      merge.minRow + merge.height <= minRow + patternHeight &&
+      merge.minCol >= minCol &&
+      merge.minCol + merge.width <= minCol + patternWidth
+  );
+
+  const cellCount = rows * columns;
+  const nextCellMergeIds = Array(cellCount).fill(null);
+  const nextMerges = {};
+  let nextId = 1;
+
+  patternMerges.forEach((merge) => {
+    const relMinRow = merge.minRow - minRow;
+    const relMinCol = merge.minCol - minCol;
+
+    for (let row = 0; row < rows; row += 1) {
+      const rowOffset = ((row - minRow) % patternHeight + patternHeight) % patternHeight;
+      if (rowOffset !== relMinRow) {
+        continue;
+      }
+
+      for (let col = 0; col < columns; col += 1) {
+        const colOffset = ((col - minCol) % patternWidth + patternWidth) % patternWidth;
+        if (colOffset !== relMinCol) {
+          continue;
+        }
+
+        if (row + merge.height > rows || col + merge.width > columns) {
+          continue;
+        }
+
+        const cells = [];
+        for (let dr = 0; dr < merge.height; dr += 1) {
+          for (let dc = 0; dc < merge.width; dc += 1) {
+            cells.push((row + dr) * columns + (col + dc));
+          }
+        }
+
+        const mergeId = nextId;
+        nextId += 1;
+        nextMerges[mergeId] = {
+          id: mergeId,
+          minRow: row,
+          minCol: col,
+          width: merge.width,
+          height: merge.height,
+          color: merge.color,
+          cells,
+        };
+        cells.forEach((index) => {
+          nextCellMergeIds[index] = mergeId;
+        });
+      }
+    }
+  });
+
+  return { merges: nextMerges, cellMergeIds: nextCellMergeIds };
+}
+
 export function extractCutPieces(cellColors, merges, cellFinishedWidth, cellFinishedHeight) {
   const covered = new Set();
   const pieces = [];
 
   Object.values(merges).forEach((merge) => {
+    if (!merge.color) {
+      return;
+    }
     merge.cells.forEach((index) => covered.add(index));
     pieces.push({
       color: merge.color.toLowerCase(),
