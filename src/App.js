@@ -631,18 +631,6 @@ function App() {
     setUserEmail(trimmedEmail);
     setSavedEmail(trimmedEmail);
 
-    const priceId =
-      mode === 'subscription'
-        ? process.env.REACT_APP_STRIPE_SUB
-        : process.env.REACT_APP_STRIPE_SINGLE;
-
-    if (!priceId) {
-      window.alert(
-        'Stripe price ID is not loaded. Check .env.local, then stop and restart npm start.'
-      );
-      return;
-    }
-
     setCheckoutLoading(true);
     try {
       savePatternSession({
@@ -654,7 +642,7 @@ function App() {
         quiltSizePreset,
         activeSide,
       });
-      await startStripeCheckout({ priceId, mode, email: trimmedEmail });
+      await startStripeCheckout({ mode, email: trimmedEmail });
     } catch (error) {
       console.error('Checkout failed:', error);
       window.alert(error.message || 'Unable to start checkout. Please try again.');
