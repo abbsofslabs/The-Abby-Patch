@@ -1,7 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { HexColorPicker } from 'react-colorful';
 import logo from './assets/abby-patch-logo.png';
+import FreePatternModal from './components/FreePatternModal';
+import PaywallModal from './components/PaywallModal';
 import PdfCaptureGrids from './components/PdfCaptureGrids';
 import PaletteSwatch from './components/PaletteSwatch';
 import QuiltGrid from './components/QuiltGrid';
@@ -14,6 +16,16 @@ import {
   buildCombinedYardageReport,
   buildYardageReport,
 } from './yardageCalculator';
+import {
+  getUserEmail,
+  hasSubscription,
+  hasUsedFree,
+  setHasSubscription,
+  setHasUsedFree,
+  setUserEmail,
+} from './utils/accessStorage';
+import { startStripeCheckout } from './utils/stripeCheckout';
+import { loadAndClearPatternSession, savePatternSession } from './utils/patternSession';
 import './App.css';
 
 function createSideState(rows, columns, repeatWidth = 2, repeatHeight = 2) {
@@ -45,8 +57,13 @@ function App() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [suppressRepeatHighlight, setSuppressRepeatHighlight] = useState(false);
+  const [accessModal, setAccessModal] = useState(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [savedEmail, setSavedEmail] = useState(() => getUserEmail());
+  const [pendingPdfDownload, setPendingPdfDownload] = useState(false);
   const frontGridRef = useRef(null);
   const backGridRef = useRef(null);
+  const executePdfDownloadRef = useRef(null);
 
   const activeSideData = sides[activeSide];
   const { cellColors, repeatWidth, repeatHeight } = activeSideData;
@@ -221,7 +238,7 @@ function App() {
     quiltHeight,
   ]);
 
-  const handleDownloadPdf = useCallback(async () => {
+  const executePdfDownload = useCallback(async () => {
     if (!grid || !yardageReport?.colors?.length) {
       return;
     }
@@ -276,6 +293,126 @@ function App() {
       });
     }
   }, [grid, quiltWidth, quiltHeight, sides.front.cellColors, sides.back.cellColors, yardageReport]);
+
+  executePdfDownloadRef.current = executePdfDownload;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') !== 'success') {
+      return;
+    }
+
+    if (params.get('type') === 'subscription') {
+      setHasSubscription(true);
+    }
+
+    const restored = loadAndClearPatternSession();
+    if (restored) {
+      setHasStarted(true);
+      setRows(restored.rows);
+      setColumns(restored.columns);
+      setGrid(restored.grid);
+      setSides(restored.sides);
+      setQuiltWidth(restored.quiltWidth);
+      setQuiltHeight(restored.quiltHeight);
+      setQuiltSizePreset(restored.quiltSizePreset);
+      setActiveSide(restored.activeSide);
+    }
+
+    window.history.replaceState({}, '', window.location.pathname);
+    setPendingPdfDownload(true);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingPdfDownload || !grid || !yardageReport?.colors?.length) {
+      return;
+    }
+    setPendingPdfDownload(false);
+    executePdfDownload();
+  }, [pendingPdfDownload, grid, yardageReport, executePdfDownload]);
+
+  const handleDownloadPdf = useCallback(() => {
+    if (!grid || !yardageReport?.colors?.length) {
+      return;
+    }
+
+    if (hasSubscription()) {
+      executePdfDownload();
+      return;
+    }
+
+    if (!hasUsedFree()) {
+      setAccessModal('free');
+      return;
+    }
+
+    setAccessModal('paywall');
+  }, [executePdfDownload, grid, yardageReport]);
+
+  const handleFreePatternSubmit = useCallback(
+    (email) => {
+      setUserEmail(email);
+      setSavedEmail(email);
+      setHasUsedFree();
+      setAccessModal(null);
+      executePdfDownload();
+    },
+    [executePdfDownload]
+  );
+
+  const handlePaywallCheckout = useCallback(async (mode, email) => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      window.alert('Please enter a valid email address before checkout.');
+      return;
+    }
+
+    setUserEmail(trimmedEmail);
+    setSavedEmail(trimmedEmail);
+
+    const priceId =
+      mode === 'subscription'
+        ? process.env.REACT_APP_STRIPE_SUB
+        : process.env.REACT_APP_STRIPE_SINGLE;
+
+    if (!priceId) {
+      window.alert('Stripe price ID is not configured.');
+      return;
+    }
+
+    setCheckoutLoading(true);
+    try {
+      savePatternSession({
+        rows,
+        columns,
+        grid,
+        sides,
+        quiltWidth,
+        quiltHeight,
+        quiltSizePreset,
+        activeSide,
+      });
+      await startStripeCheckout({ priceId, mode, email: trimmedEmail });
+    } catch (error) {
+      console.error('Checkout failed:', error);
+      window.alert(error.message || 'Unable to start checkout. Please try again.');
+      setCheckoutLoading(false);
+    }
+  }, [rows, columns, grid, sides, quiltWidth, quiltHeight, quiltSizePreset, activeSide]);
+
+  const handlePaySingle = useCallback(
+    (email) => {
+      handlePaywallCheckout('payment', email);
+    },
+    [handlePaywallCheckout]
+  );
+
+  const handleSubscribe = useCallback(
+    (email) => {
+      handlePaywallCheckout('subscription', email);
+    },
+    [handlePaywallCheckout]
+  );
 
   return (
     <div className="abby-patch">
@@ -546,6 +683,21 @@ function App() {
             </>
           )}
         </div>
+      )}
+      {accessModal === 'free' && (
+        <FreePatternModal
+          initialEmail={savedEmail}
+          onSubmit={handleFreePatternSubmit}
+        />
+      )}
+      {accessModal === 'paywall' && (
+        <PaywallModal
+          initialEmail={savedEmail}
+          onClose={() => setAccessModal(null)}
+          onPaySingle={handlePaySingle}
+          onSubscribe={handleSubscribe}
+          isCheckoutLoading={checkoutLoading}
+        />
       )}
     </div>
   );
