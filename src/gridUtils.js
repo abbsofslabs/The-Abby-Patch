@@ -85,6 +85,12 @@ export function applyTileFromSelection(
   };
 }
 
+export function getColoredBlockIndices(cellColors) {
+  return cellColors
+    .map((color, index) => (color ? index : null))
+    .filter((index) => index != null);
+}
+
 export function addBlockSelection(selectedBlocks, index) {
   const set = new Set(selectedBlocks);
   set.add(index);
@@ -95,6 +101,11 @@ export function addBlockSelections(selectedBlocks, indices) {
   const set = new Set(selectedBlocks);
   indices.forEach((index) => set.add(index));
   return [...set].sort((a, b) => a - b);
+}
+
+export function removeBlockSelections(selectedBlocks, indices) {
+  const remove = new Set(indices);
+  return selectedBlocks.filter((index) => !remove.has(index));
 }
 
 export function toggleBlockSelection(selectedBlocks, index) {

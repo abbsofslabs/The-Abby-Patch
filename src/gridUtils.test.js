@@ -1,4 +1,9 @@
-import { applyTileFromSelection } from './gridUtils';
+import {
+  addBlockSelections,
+  applyTileFromSelection,
+  getColoredBlockIndices,
+  removeBlockSelections,
+} from './gridUtils';
 import { mergeSelectedBlocks } from './mergeUtils';
 
 test('tiles the selected pattern across the entire grid', () => {
@@ -51,6 +56,23 @@ test('tiles merged regions across the entire grid', () => {
   expect(cellMergeIds[2]).toBe(cellMergeIds[3]);
   expect(cellMergeIds[8]).toBe(cellMergeIds[9]);
   expect(cellMergeIds[0]).not.toBe(cellMergeIds[2]);
+});
+
+test('getColoredBlockIndices returns only painted cells', () => {
+  const cellColors = [null, '#ff0000', null, '#00ff00', '#00ff00'];
+  expect(getColoredBlockIndices(cellColors)).toEqual([1, 3, 4]);
+});
+
+test('removeBlockSelections drops only the given indices', () => {
+  expect(removeBlockSelections([0, 1, 2, 5], [1, 5])).toEqual([0, 2]);
+});
+
+test('add and remove block selections can toggle a block', () => {
+  let selected = [];
+  selected = addBlockSelections(selected, [3]);
+  expect(selected).toEqual([3]);
+  selected = removeBlockSelections(selected, [3]);
+  expect(selected).toEqual([]);
 });
 
 test('returns an error when the selected pattern has no color', () => {

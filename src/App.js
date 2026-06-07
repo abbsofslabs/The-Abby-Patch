@@ -11,7 +11,12 @@ import QuiltGrid from './components/QuiltGrid';
 import YardagePanel from './components/YardagePanel';
 import { CREAM, FABRIC_PALETTE, QUILT_SIZE_PRESETS, SIDES } from './constants';
 import { generateQuiltPdf } from './generateQuiltPdf';
-import { addBlockSelections, applyTileFromSelection } from './gridUtils';
+import {
+  addBlockSelections,
+  applyTileFromSelection,
+  getColoredBlockIndices,
+  removeBlockSelections,
+} from './gridUtils';
 import {
   getMergedCellIndices,
   mergeSelectedBlocks,
@@ -208,7 +213,7 @@ function App() {
   }, [activeSide, grid]);
 
   const applyCellStroke = useCallback(
-    (index) => {
+    (index, { allowToggle = false } = {}) => {
       if (selectionMode) {
         setSides((prev) => {
           const side = prev[activeSide];
@@ -217,14 +222,21 @@ function App() {
             side.merges,
             side.cellMergeIds
           );
-          if (targetIndices.every((cellIndex) => side.selectedBlocks.includes(cellIndex))) {
+          const allSelected = targetIndices.every((cellIndex) =>
+            side.selectedBlocks.includes(cellIndex)
+          );
+
+          if (allSelected && !allowToggle) {
             return prev;
           }
+
           return {
             ...prev,
             [activeSide]: {
               ...side,
-              selectedBlocks: addBlockSelections(side.selectedBlocks, targetIndices),
+              selectedBlocks: allSelected
+                ? removeBlockSelections(side.selectedBlocks, targetIndices)
+                : addBlockSelections(side.selectedBlocks, targetIndices),
             },
           };
         });
@@ -277,9 +289,9 @@ function App() {
   const handleCellPointerDown = useCallback(
     (index) => {
       isPaintingRef.current = true;
-      applyCellStroke(index);
+      applyCellStroke(index, { allowToggle: selectionMode });
     },
-    [applyCellStroke]
+    [applyCellStroke, selectionMode]
   );
 
   const handleCellPointerEnter = useCallback(
@@ -342,6 +354,25 @@ function App() {
       [activeSide]: { ...prev[activeSide], selectedBlocks: [] },
     }));
   }, [activeSide]);
+
+  const coloredBlockCount = useMemo(
+    () => getColoredBlockIndices(cellColors).length,
+    [cellColors]
+  );
+
+  const handleSelectAllColored = useCallback(() => {
+    const indices = getColoredBlockIndices(cellColors);
+    if (!indices.length) {
+      return;
+    }
+
+    setSides((prev) => ({
+      ...prev,
+      [activeSide]: { ...prev[activeSide], selectedBlocks: indices },
+    }));
+    setSelectionMode(true);
+    setEraserMode(false);
+  }, [activeSide, cellColors]);
 
   const handleMergeSquares = useCallback(() => {
     if (!grid) return;
@@ -922,6 +953,14 @@ function App() {
                   <button
                     type="button"
                     className="abby-patch__tool-button"
+                    onClick={handleSelectAllColored}
+                    disabled={!coloredBlockCount}
+                  >
+                    Select all colored
+                  </button>
+                  <button
+                    type="button"
+                    className="abby-patch__tool-button"
                     onClick={handleClearSelection}
                     disabled={!selectedBlocks.length}
                   >
@@ -955,7 +994,7 @@ function App() {
                 <p className="abby-patch__repeat-hint">
                   {selectedBlocks.length > 0
                     ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — merge same-color rectangles, or tile as a repeating pattern.`
-                    : 'Turn on Select blocks, then click or drag to choose blocks for merging or tiling.'}
+                    : 'Turn on Select blocks, then click or drag to choose blocks. Click a selected block again to deselect it.'}
                 </p>
               </section>
 
