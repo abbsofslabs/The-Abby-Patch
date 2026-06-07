@@ -3,7 +3,6 @@ import { jsPDF } from 'jspdf';
 import {
   formatDimension,
   formatYards,
-  getCutBlockSize,
   SEAM_ALLOWANCE_PER_SIDE,
 } from './yardageCalculator';
 
@@ -155,17 +154,17 @@ function drawSwatchLabel(pdf, x, y, color, label, swatchSize = SWATCH_SIZE, maxL
 }
 
 function formatCuttingInstruction(count, cutWidth, cutHeight) {
-  return `Cut ${count} blocks at ${formatDimension(cutWidth)} × ${formatDimension(cutHeight)} inches`;
+  const unit = cutWidth === cutHeight ? 'squares' : 'rectangles';
+  return `Cut ${count} ${unit} at ${formatDimension(cutWidth)} × ${formatDimension(cutHeight)} inches`;
 }
 
-function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, getCount) {
-  const rows = colors.filter((row) => getCount(row) > 0);
+function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle) {
+  const rows = colors.filter((row) => (row.cutPieces?.length ? row.cutPieces : []).some((p) => p.count > 0));
   if (!rows.length || !blockSize) {
     return;
   }
 
   const { pdf } = ctx;
-  const cutSize = getCutBlockSize(blockSize.width, blockSize.height);
   const instructionX = MARGIN + 108;
   const instructionWidth = RIGHT_EDGE - instructionX;
 
@@ -181,8 +180,9 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, get
   pdf.setFont('helvetica', 'normal');
   writeWrappedText(
     ctx,
-    `Finished block: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in. ` +
-      `Cut size includes ${formatDimension(SEAM_ALLOWANCE_PER_SIDE)} in seam allowance per side.`,
+    `Grid cell: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in finished. ` +
+      `Merged pieces use one seam allowance on outer edges only (${formatDimension(SEAM_ALLOWANCE_PER_SIDE)} in per side). ` +
+      `Yardage assumes 44 in usable width and allows rotating rectangles.`,
     MARGIN,
     CONTENT_WIDTH,
     MIN_FONT + 8
@@ -190,12 +190,20 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, get
   ctx.addY(6);
 
   rows.forEach((row) => {
-    const count = getCount(row);
-    const instruction = formatCuttingInstruction(count, cutSize.width, cutSize.height);
+    const cutPieces = row.cutPieces || [];
+    const instructions = cutPieces
+      .filter((piece) => piece.count > 0)
+      .map((piece) => formatCuttingInstruction(piece.count, piece.cutWidth, piece.cutHeight));
+
+    if (!instructions.length) {
+      return;
+    }
 
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(CUTTING_FONT);
-    const instructionLines = pdf.splitTextToSize(instruction, instructionWidth);
+    const instructionLines = instructions.flatMap((instruction) =>
+      pdf.splitTextToSize(instruction, instructionWidth)
+    );
     const rowHeight = Math.max(CUTTING_ROW_HEIGHT, instructionLines.length * (CUTTING_FONT + 8));
 
     ctx.ensureSpace(rowHeight);
@@ -277,7 +285,7 @@ function drawSideYardageTable(ctx, report, colorLabels, emptyMessage) {
 
   pdf.setFont('helvetica', 'bold');
   pdf.text('Color', columns.color, ctx.getY());
-  pdf.text('Blocks', columns.blocks, ctx.getY());
+  pdf.text('Pieces', columns.blocks, ctx.getY());
   pdf.text('Yards', columns.yards, ctx.getY());
   ctx.addY(ROW_HEIGHT);
 
@@ -387,8 +395,7 @@ export async function generateQuiltPdf({
     frontReport.colors,
     colorLabels,
     frontReport.blockSize,
-    'Front cutting guide',
-    (row) => row.count
+    'Front cutting guide'
   );
 
   drawSectionHeading(ctx, 'Back');
@@ -404,8 +411,7 @@ export async function generateQuiltPdf({
     backReport.colors,
     colorLabels,
     backReport.blockSize,
-    'Back cutting guide',
-    (row) => row.count
+    'Back cutting guide'
   );
 
   ctx.ensureSpace(SECTION_FONT + CUTTING_ROW_HEIGHT * 2);
@@ -415,8 +421,7 @@ export async function generateQuiltPdf({
     combinedReport.colors,
     colorLabels,
     combinedReport.blockSize,
-    'Combined cutting guide',
-    (row) => row.totalCount
+    'Combined cutting guide'
   );
 
   ctx.pdf.save('abby-patch-quilt-pattern.pdf');

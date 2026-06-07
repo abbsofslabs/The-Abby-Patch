@@ -4,6 +4,7 @@ import { CREAM } from '../constants';
 function GridCell({
   index,
   color,
+  mergeBorders,
   isSelected,
   sideLabel,
   onCellPointerDown,
@@ -25,9 +26,19 @@ function GridCell({
   const className = [
     'abby-patch__cell',
     isSelected ? 'abby-patch__cell--selected' : '',
+    mergeBorders?.hideTop ? 'abby-patch__cell--merge-hide-top' : '',
+    mergeBorders?.hideBottom ? 'abby-patch__cell--merge-hide-bottom' : '',
+    mergeBorders?.hideLeft ? 'abby-patch__cell--merge-hide-left' : '',
+    mergeBorders?.hideRight ? 'abby-patch__cell--merge-hide-right' : '',
+    mergeBorders?.isAnchor ? 'abby-patch__cell--merge-anchor' : '',
   ]
     .filter(Boolean)
     .join(' ');
+
+  const mergeLabel =
+    mergeBorders?.isAnchor && mergeBorders.mergeWidth * mergeBorders.mergeHeight > 1
+      ? `${mergeBorders.mergeWidth}×${mergeBorders.mergeHeight}`
+      : null;
 
   return (
     <button
@@ -36,9 +47,14 @@ function GridCell({
       style={{ backgroundColor }}
       onPointerDown={handlePointerDown}
       onPointerEnter={handlePointerEnter}
-      aria-label={`${sideLabel} patch ${index + 1}${color ? `, color ${color}` : ', empty'}${isSelected ? ', selected for repeat' : ''}`}
+      aria-label={`${sideLabel} patch ${index + 1}${color ? `, color ${color}` : ', empty'}${isSelected ? ', selected' : ''}${mergeLabel ? `, merged ${mergeLabel}` : ''}`}
       aria-pressed={isSelected}
     >
+      {mergeLabel && (
+        <span className="abby-patch__cell-merge-label" aria-hidden="true">
+          {mergeLabel}
+        </span>
+      )}
       {isSelected && <span className="abby-patch__cell-selection-mark" aria-hidden="true" />}
     </button>
   );

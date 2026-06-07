@@ -13,6 +13,11 @@ import { CREAM, FABRIC_PALETTE, QUILT_SIZE_PRESETS, SIDES } from './constants';
 import { generateQuiltPdf } from './generateQuiltPdf';
 import { addBlockSelection, applyTileFromSelection } from './gridUtils';
 import {
+  dissolveMergesTouchingIndices,
+  mergeSelectedBlocks,
+  unmergeSelectedBlocks,
+} from './mergeUtils';
+import {
   buildCombinedYardageReport,
   buildYardageReport,
   calculateGridDimensions,
@@ -34,9 +39,31 @@ import './App.css';
 function createSideState(rows, columns) {
   const r = Math.max(1, rows);
   const c = Math.max(1, columns);
+  const cellCount = r * c;
   return {
-    cellColors: Array(r * c).fill(null),
+    cellColors: Array(cellCount).fill(null),
     selectedBlocks: [],
+    merges: {},
+    cellMergeIds: Array(cellCount).fill(null),
+  };
+}
+
+function normalizeSideState(side, rows, columns) {
+  const cellCount = rows * columns;
+  const cellColors =
+    side?.cellColors?.length === cellCount
+      ? side.cellColors
+      : Array(cellCount).fill(null);
+  const cellMergeIds =
+    side?.cellMergeIds?.length === cellCount
+      ? side.cellMergeIds
+      : Array(cellCount).fill(null);
+
+  return {
+    cellColors,
+    selectedBlocks: side?.selectedBlocks ?? [],
+    merges: side?.merges ?? {},
+    cellMergeIds,
   };
 }
 
@@ -69,8 +96,15 @@ function App() {
   const isPaintingRef = useRef(false);
 
   const activeSideData = sides[activeSide];
-  const { cellColors, selectedBlocks } = activeSideData;
+  const { cellColors, selectedBlocks, merges, cellMergeIds } = activeSideData;
   const activeSideLabel = SIDES.find((s) => s.id === activeSide)?.label ?? 'Front';
+
+  let downloadPricingMessage = null;
+  if (!hasSubscription()) {
+    downloadPricingMessage = hasUsedFree()
+      ? 'You\u2019ve used your free download. Additional patterns are $2 each or $10/month unlimited.'
+      : 'Your first pattern download is free. After that, additional downloads cost money.';
+  }
 
   const handleStart = useCallback(() => setHasStarted(true), []);
 
@@ -162,6 +196,8 @@ function App() {
         [activeSide]: {
           ...currentSide,
           cellColors: result.cellColors,
+          merges: {},
+          cellMergeIds: Array(grid.rows * grid.columns).fill(null),
         },
       };
     });
@@ -194,11 +230,29 @@ function App() {
         if (side.cellColors[index] === nextColor) {
           return prev;
         }
+
+        let nextMerges = side.merges;
+        let nextCellMergeIds = side.cellMergeIds;
+        if (side.cellMergeIds[index] != null) {
+          const dissolved = dissolveMergesTouchingIndices(
+            side.merges,
+            side.cellMergeIds,
+            [index]
+          );
+          nextMerges = dissolved.merges;
+          nextCellMergeIds = dissolved.cellMergeIds;
+        }
+
         const next = [...side.cellColors];
         next[index] = nextColor;
         return {
           ...prev,
-          [activeSide]: { ...side, cellColors: next },
+          [activeSide]: {
+            ...side,
+            cellColors: next,
+            merges: nextMerges,
+            cellMergeIds: nextCellMergeIds,
+          },
         };
       });
     },
@@ -242,6 +296,8 @@ function App() {
       [activeSide]: {
         ...prev[activeSide],
         cellColors: Array(grid.rows * grid.columns).fill(null),
+        merges: {},
+        cellMergeIds: Array(grid.rows * grid.columns).fill(null),
       },
     }));
     setEraserMode(false);
@@ -270,6 +326,64 @@ function App() {
       ...prev,
       [activeSide]: { ...prev[activeSide], selectedBlocks: [] },
     }));
+  }, [activeSide]);
+
+  const handleMergeSquares = useCallback(() => {
+    if (!grid) return;
+
+    setSides((prev) => {
+      const side = prev[activeSide];
+      const result = mergeSelectedBlocks(
+        side.cellColors,
+        side.selectedBlocks,
+        grid.columns,
+        side.merges,
+        side.cellMergeIds
+      );
+
+      if (!result.ok) {
+        window.alert(result.message);
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [activeSide]: {
+          ...side,
+          merges: result.merges,
+          cellMergeIds: result.cellMergeIds,
+          selectedBlocks: [],
+        },
+      };
+    });
+    setSelectionMode(false);
+  }, [activeSide, grid]);
+
+  const handleUnmergeSquares = useCallback(() => {
+    setSides((prev) => {
+      const side = prev[activeSide];
+      const result = unmergeSelectedBlocks(
+        side.selectedBlocks,
+        side.merges,
+        side.cellMergeIds
+      );
+
+      if (!result.ok) {
+        window.alert(result.message);
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [activeSide]: {
+          ...side,
+          merges: result.merges,
+          cellMergeIds: result.cellMergeIds,
+          selectedBlocks: [],
+        },
+      };
+    });
+    setSelectionMode(false);
   }, [activeSide]);
 
   const handleQuiltWidthChange = useCallback((event) => {
@@ -312,13 +426,21 @@ function App() {
     if (!grid) return null;
     return buildCombinedYardageReport(
       sides.front.cellColors,
+      sides.front.merges,
       sides.back.cellColors,
+      sides.back.merges,
       grid.finishedWidth,
       grid.finishedHeight,
       grid.columns,
       grid.rows
     );
-  }, [sides.front.cellColors, sides.back.cellColors, grid]);
+  }, [
+    sides.front.cellColors,
+    sides.front.merges,
+    sides.back.cellColors,
+    sides.back.merges,
+    grid,
+  ]);
 
   const executePdfDownload = useCallback(async () => {
     if (!grid || !yardageReport?.colors?.length) {
@@ -327,6 +449,7 @@ function App() {
 
     const frontReport = buildYardageReport(
       sides.front.cellColors,
+      sides.front.merges,
       grid.finishedWidth,
       grid.finishedHeight,
       grid.columns,
@@ -334,6 +457,7 @@ function App() {
     );
     const backReport = buildYardageReport(
       sides.back.cellColors,
+      sides.back.merges,
       grid.finishedWidth,
       grid.finishedHeight,
       grid.columns,
@@ -374,7 +498,14 @@ function App() {
         setIsDownloadingPdf(false);
       });
     }
-  }, [grid, sides.front.cellColors, sides.back.cellColors, yardageReport]);
+  }, [
+    grid,
+    sides.front.cellColors,
+    sides.front.merges,
+    sides.back.cellColors,
+    sides.back.merges,
+    yardageReport,
+  ]);
 
   executePdfDownloadRef.current = executePdfDownload;
 
@@ -392,7 +523,10 @@ function App() {
     if (restored) {
       setHasStarted(true);
       setGrid(restored.grid);
-      setSides(restored.sides);
+      setSides({
+        front: normalizeSideState(restored.sides.front, restored.grid.rows, restored.grid.columns),
+        back: normalizeSideState(restored.sides.back, restored.grid.rows, restored.grid.columns),
+      });
       setQuiltWidth(restored.quiltWidth);
       setQuiltHeight(restored.quiltHeight);
       setBlockSize(restored.blockSize ?? restored.grid?.blockSize ?? 6);
@@ -457,7 +591,9 @@ function App() {
         : process.env.REACT_APP_STRIPE_SINGLE;
 
     if (!priceId) {
-      window.alert('Stripe price ID is not configured.');
+      window.alert(
+        'Stripe price ID is not loaded. Check .env.local, then stop and restart npm start.'
+      );
       return;
     }
 
@@ -741,6 +877,8 @@ function App() {
                   rows={grid.rows}
                   columns={grid.columns}
                   cellColors={cellColors}
+                  merges={merges}
+                  cellMergeIds={cellMergeIds}
                   selectedBlocks={selectedBlocks}
                   suppressRepeatHighlight={suppressRepeatHighlight}
                   eraserMode={eraserMode}
@@ -776,6 +914,22 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    className="abby-patch__tool-button"
+                    onClick={handleMergeSquares}
+                    disabled={!selectedBlocks.length}
+                  >
+                    Merge squares
+                  </button>
+                  <button
+                    type="button"
+                    className="abby-patch__tool-button"
+                    onClick={handleUnmergeSquares}
+                    disabled={!selectedBlocks.length}
+                  >
+                    Unmerge
+                  </button>
+                  <button
+                    type="button"
                     className="abby-patch__button abby-patch__button--tile"
                     onClick={handleTilePattern}
                     disabled={!selectedBlocks.length}
@@ -785,8 +939,8 @@ function App() {
                 </div>
                 <p className="abby-patch__repeat-hint">
                   {selectedBlocks.length > 0
-                    ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected as your pattern — tile fills the whole grid.`
-                    : 'Turn on Select blocks, then click or drag to choose your pattern.'}
+                    ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — merge same-color rectangles, or tile as a repeating pattern.`
+                    : 'Turn on Select blocks, then click or drag to choose blocks for merging or tiling.'}
                 </p>
               </section>
 
@@ -795,6 +949,7 @@ function App() {
                   grid={grid}
                   yardageReport={yardageReport}
                   isDownloadingPdf={isDownloadingPdf}
+                  downloadPricingMessage={downloadPricingMessage}
                   onDownloadPdf={handleDownloadPdf}
                 />
               </div>
@@ -808,7 +963,11 @@ function App() {
                   rows={grid.rows}
                   columns={grid.columns}
                   frontCellColors={sides.front.cellColors}
+                  frontMerges={sides.front.merges}
+                  frontCellMergeIds={sides.front.cellMergeIds}
                   backCellColors={sides.back.cellColors}
+                  backMerges={sides.back.merges}
+                  backCellMergeIds={sides.back.cellMergeIds}
                   isExporting={suppressRepeatHighlight}
                 />
               )}

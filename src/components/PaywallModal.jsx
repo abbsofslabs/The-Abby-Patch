@@ -30,6 +30,11 @@ function PaywallModal({
           Get more patterns
         </h2>
 
+        <p className="abby-patch__modal-desc">
+          You&apos;ve already used your free download. Additional patterns cost money — pick an
+          option below.
+        </p>
+
         <label htmlFor="paywall-email" className="abby-patch__modal-label">
           Email
         </label>

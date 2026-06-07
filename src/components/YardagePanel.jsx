@@ -1,7 +1,13 @@
 import { memo } from 'react';
 import { formatDimension, formatYards } from '../yardageCalculator';
 
-function YardagePanel({ grid, yardageReport, isDownloadingPdf, onDownloadPdf }) {
+function YardagePanel({
+  grid,
+  yardageReport,
+  isDownloadingPdf,
+  downloadPricingMessage,
+  onDownloadPdf,
+}) {
   return (
     <section className="abby-patch__yardage abby-patch__panel" aria-label="Yardage calculator">
       <h2 className="abby-patch__section-title">Yardage calculator — front &amp; back combined</h2>
@@ -21,9 +27,9 @@ function YardagePanel({ grid, yardageReport, isDownloadingPdf, onDownloadPdf }) 
       )}
 
       <p className="abby-patch__yardage-note abby-patch__yardage-note--inline">
-        Square inches are based on cut sizes with {formatDimension(0.25)}&Prime; seam allowance per
-        side. Yardage is based on 36&Prime; &times; 44&Prime; per yard and rounded up to the
-        nearest &frac14; yard. Fabric totals combine both quilt sides.
+        Cut sizes include {formatDimension(0.25)}&Prime; seam allowance on outer edges only (merged
+        pieces count as one cut). Yardage uses 44&Prime; usable width, allows rotating rectangles,
+        and is rounded up to the nearest &frac14; yard. Totals combine both quilt sides.
       </p>
 
       {yardageReport && yardageReport.colors.length > 0 ? (
@@ -78,12 +84,15 @@ function YardagePanel({ grid, yardageReport, isDownloadingPdf, onDownloadPdf }) 
             </table>
           </div>
           <p className="abby-patch__yardage-note">
-            *Square inches use cut block sizes with {formatDimension(0.25)}&Prime; seam allowance
-            per side, calculated from combined front and back block counts per color.
+            *Square inches use cut sizes (including merged rectangles) with outer-edge seam
+            allowance, calculated from combined front and back piece counts per color.
           </p>
           <p className="abby-patch__yardage-disclaimer">
             Yardage includes seam allowance and cutting waste. Actual needs may vary slightly.
           </p>
+          {downloadPricingMessage && (
+            <p className="abby-patch__download-pricing">{downloadPricingMessage}</p>
+          )}
           <button
             type="button"
             className="abby-patch__button abby-patch__button--download"

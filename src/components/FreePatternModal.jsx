@@ -28,7 +28,8 @@ function FreePatternModal({ initialEmail, onSubmit }) {
           Get your free pattern
         </h2>
         <p className="abby-patch__modal-desc">
-          Enter your email to download your first quilt pattern free.
+          Your first pattern download is free. Enter your email to get started — after that,
+          additional downloads cost $2 each or $10/month for unlimited.
         </p>
         <form onSubmit={handleSubmit} className="abby-patch__modal-form">
           <label htmlFor="free-pattern-email" className="abby-patch__modal-label">
