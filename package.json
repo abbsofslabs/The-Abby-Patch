@@ -2,7 +2,7 @@
   "name": "quilt-app",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://abbsofslabs.github.io/The-Abby-Patch",
+  "homepage": ".",
   "dependencies": {
     "@stripe/stripe-js": "^9.7.0",
     "@testing-library/dom": "^10.4.1",
