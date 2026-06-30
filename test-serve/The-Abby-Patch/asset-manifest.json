@@ -1,0 +1,20 @@
+{
+  "files": {
+    "main.css": "/The-Abby-Patch/static/css/main.3f818472.css",
+    "main.js": "/The-Abby-Patch/static/js/main.62a84c23.js",
+    "static/js/977.764abd17.chunk.js": "/The-Abby-Patch/static/js/977.764abd17.chunk.js",
+    "static/js/455.c7185638.chunk.js": "/The-Abby-Patch/static/js/455.c7185638.chunk.js",
+    "static/js/453.47da1a78.chunk.js": "/The-Abby-Patch/static/js/453.47da1a78.chunk.js",
+    "static/media/abby-patch-logo.png": "/The-Abby-Patch/static/media/abby-patch-logo.98f6edce0bec0b770380.png",
+    "index.html": "/The-Abby-Patch/index.html",
+    "main.3f818472.css.map": "/The-Abby-Patch/static/css/main.3f818472.css.map",
+    "main.62a84c23.js.map": "/The-Abby-Patch/static/js/main.62a84c23.js.map",
+    "977.764abd17.chunk.js.map": "/The-Abby-Patch/static/js/977.764abd17.chunk.js.map",
+    "455.c7185638.chunk.js.map": "/The-Abby-Patch/static/js/455.c7185638.chunk.js.map",
+    "453.47da1a78.chunk.js.map": "/The-Abby-Patch/static/js/453.47da1a78.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.3f818472.css",
+    "static/js/main.62a84c23.js"
+  ]
+}

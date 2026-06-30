@@ -6,6 +6,53 @@
 
 body {
   margin: 0;
+  background-color: #e8e2d6;
+  color: #3d2e26;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.abby-patch-error {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  font-family: Georgia, 'Times New Roman', serif;
+  background-color: #e8e2d6;
+  color: #3d2e26;
+}
+
+.abby-patch-error h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.abby-patch-error p {
+  margin: 0;
+  max-width: 36ch;
+  line-height: 1.5;
+}
+
+.abby-patch-error__detail {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.abby-patch-error button {
+  margin-top: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  border: 2px solid #3d2e26;
+  border-radius: 999px;
+  background: #8da080;
+  color: #f5f2e9;
+  font-weight: 600;
+  cursor: pointer;
 }
