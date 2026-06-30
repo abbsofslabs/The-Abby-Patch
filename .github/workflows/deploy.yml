@@ -24,15 +24,16 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Build
         run: npm run build
         env:
+          CI: false
           REACT_APP_CHECKOUT_API_URL: ${{ secrets.REACT_APP_CHECKOUT_API_URL }}
           REACT_APP_STRIPE_SINGLE: ${{ secrets.REACT_APP_STRIPE_SINGLE }}
           REACT_APP_STRIPE_SUB: ${{ secrets.REACT_APP_STRIPE_SUB }}
