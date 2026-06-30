@@ -1,5 +1,8 @@
 export const CREAM = '#F5F2E9';
 
+/** Set to true when ready to gate PDF downloads behind Stripe again. */
+export const PAYWALL_ENABLED = false;
+
 export const SIDES = [
   { id: 'front', label: 'Front' },
   { id: 'back', label: 'Back' },

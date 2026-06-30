@@ -4,15 +4,30 @@ import { formatDimension, formatYards } from '../yardageCalculator';
 function YardagePanel({
   grid,
   yardageReport,
+  showYardage,
   isDownloadingPdf,
   downloadPricingMessage,
   onDownloadPdf,
 }) {
-  return (
-    <section className="abby-patch__yardage abby-patch__panel" aria-label="Yardage calculator">
-      <h2 className="abby-patch__section-title">Yardage calculator — front &amp; back combined</h2>
+  const hasColoredBlocks = yardageReport && yardageReport.colors.length > 0;
 
-      {yardageReport?.blockSize && grid && (
+  return (
+    <section
+      className="abby-patch__yardage abby-patch__panel"
+      aria-label={showYardage ? 'Yardage calculator' : 'Download design'}
+    >
+      <h2 className="abby-patch__section-title">
+        {showYardage ? 'Yardage calculator — front & back combined' : 'Download your design'}
+      </h2>
+
+      {!showYardage && (
+        <p className="abby-patch__yardage-empty">
+          When your quilt is colored, download your PDF. The yardage calculator unlocks after your
+          first download.
+        </p>
+      )}
+
+      {showYardage && yardageReport?.blockSize && grid && (
         <p className="abby-patch__block-size">
           Finished quilt:{' '}
           <strong>
@@ -26,13 +41,15 @@ function YardagePanel({
         </p>
       )}
 
-      <p className="abby-patch__yardage-note abby-patch__yardage-note--inline">
-        Cut sizes include {formatDimension(0.25)}&Prime; seam allowance on outer edges only (merged
-        pieces count as one cut). Yardage uses 44&Prime; usable width, allows rotating rectangles,
-        and is rounded up to the nearest &frac14; yard. Totals combine both quilt sides.
-      </p>
+      {showYardage && (
+        <p className="abby-patch__yardage-note abby-patch__yardage-note--inline">
+          Cut sizes include {formatDimension(0.25)}&Prime; seam allowance on outer edges only (merged
+          pieces count as one cut). Yardage uses 44&Prime; usable width, allows rotating rectangles,
+          and is rounded up to the nearest &frac14; yard. Totals combine both quilt sides.
+        </p>
+      )}
 
-      {yardageReport && yardageReport.colors.length > 0 ? (
+      {showYardage && hasColoredBlocks ? (
         <>
           <div className="abby-patch__yardage-table-wrapper">
             <table className="abby-patch__yardage-table">
@@ -90,22 +107,27 @@ function YardagePanel({
           <p className="abby-patch__yardage-disclaimer">
             Yardage includes seam allowance and cutting waste. Actual needs may vary slightly.
           </p>
-          {downloadPricingMessage && (
-            <p className="abby-patch__download-pricing">{downloadPricingMessage}</p>
-          )}
-          <button
-            type="button"
-            className="abby-patch__button abby-patch__button--download"
-            onClick={onDownloadPdf}
-            disabled={isDownloadingPdf}
-          >
-            {isDownloadingPdf ? 'Creating PDF…' : 'Download PDF'}
-          </button>
         </>
       ) : (
-        <p className="abby-patch__yardage-empty">
-          Color blocks on the front and/or back to see combined fabric yardage estimates.
-        </p>
+        showYardage && (
+          <p className="abby-patch__yardage-empty">
+            Color blocks on the front and/or back to see combined fabric yardage estimates.
+          </p>
+        )
+      )}
+
+      {downloadPricingMessage && (
+        <p className="abby-patch__download-pricing">{downloadPricingMessage}</p>
+      )}
+      {hasColoredBlocks && (
+        <button
+          type="button"
+          className="abby-patch__button abby-patch__button--download"
+          onClick={onDownloadPdf}
+          disabled={isDownloadingPdf}
+        >
+          {isDownloadingPdf ? 'Creating PDF…' : 'Download PDF'}
+        </button>
       )}
     </section>
   );

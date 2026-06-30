@@ -9,11 +9,12 @@ import PdfCaptureGrids from './components/PdfCaptureGrids';
 import PaletteSwatch from './components/PaletteSwatch';
 import QuiltGrid from './components/QuiltGrid';
 import YardagePanel from './components/YardagePanel';
-import { CREAM, FABRIC_PALETTE, QUILT_SIZE_PRESETS, SIDES } from './constants';
+import { CREAM, FABRIC_PALETTE, PAYWALL_ENABLED, QUILT_SIZE_PRESETS, SIDES } from './constants';
 import { generateQuiltPdf } from './generateQuiltPdf';
 import {
   addBlockSelections,
-  applyTileFromSelection,
+  applyPatternSnapshot,
+  extractPatternSnapshot,
   getColoredBlockIndices,
   removeBlockSelections,
 } from './gridUtils';
@@ -90,11 +91,13 @@ function App() {
   const [quiltSizePreset, setQuiltSizePreset] = useState('custom');
   const [hasStarted, setHasStarted] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [hasDownloadedDesign, setHasDownloadedDesign] = useState(false);
   const [suppressRepeatHighlight, setSuppressRepeatHighlight] = useState(false);
   const [accessModal, setAccessModal] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [savedEmail, setSavedEmail] = useState(() => getUserEmail());
   const [pendingPdfDownload, setPendingPdfDownload] = useState(false);
+  const [patternClipboard, setPatternClipboard] = useState({ front: null, back: null });
   const frontGridRef = useRef(null);
   const backGridRef = useRef(null);
   const executePdfDownloadRef = useRef(null);
@@ -103,9 +106,10 @@ function App() {
   const activeSideData = sides[activeSide];
   const { cellColors, selectedBlocks, merges, cellMergeIds } = activeSideData;
   const activeSideLabel = SIDES.find((s) => s.id === activeSide)?.label ?? 'Front';
+  const copiedPattern = patternClipboard[activeSide];
 
   let downloadPricingMessage = null;
-  if (!hasSubscription()) {
+  if (PAYWALL_ENABLED && !hasSubscription()) {
     downloadPricingMessage = hasUsedFree()
       ? 'You\u2019ve used your free download. Additional patterns are $2 each or $10/month unlimited.'
       : 'Your first pattern download is free. After that, additional downloads cost money.';
@@ -168,35 +172,70 @@ function App() {
     });
     setEraserMode(false);
     setSelectionMode(false);
+    setHasDownloadedDesign(false);
   }, [quiltWidth, quiltHeight, blockSize]);
 
-  const handleTilePattern = useCallback(() => {
+  const handleCopyPattern = useCallback(() => {
+    if (!grid) return;
+
+    const side = sides[activeSide];
+    const snapshot = extractPatternSnapshot(
+      side.cellColors,
+      side.merges,
+      side.cellMergeIds,
+      grid.columns,
+      side.selectedBlocks
+    );
+
+    if (snapshot.error === 'no_selection') {
+      window.alert('Select the blocks that form your pattern first.');
+      return;
+    }
+
+    if (snapshot.error === 'no_motif') {
+      window.alert('Color the selected pattern blocks before copying.');
+      return;
+    }
+
+    setPatternClipboard((prev) => ({ ...prev, [activeSide]: snapshot }));
+    setSides((prev) => ({
+      ...prev,
+      [activeSide]: { ...prev[activeSide], selectedBlocks: [] },
+    }));
+    setSelectionMode(false);
+  }, [activeSide, grid, sides]);
+
+  const handlePastePattern = useCallback(() => {
     if (!grid) return;
 
     setSides((prev) => {
       const currentSide = prev[activeSide];
-      if (!currentSide.selectedBlocks.length) {
-        window.alert('Select the blocks that form your pattern first.');
+      const snapshot =
+        patternClipboard[activeSide] ??
+        extractPatternSnapshot(
+          currentSide.cellColors,
+          currentSide.merges,
+          currentSide.cellMergeIds,
+          grid.columns,
+          currentSide.selectedBlocks
+        );
+
+      if (snapshot.error === 'no_selection') {
+        window.alert('Select blocks or copy a pattern first.');
         return prev;
       }
 
-      const result = applyTileFromSelection(
+      if (snapshot.error === 'no_motif') {
+        window.alert('Color the selected pattern blocks before pasting.');
+        return prev;
+      }
+
+      const result = applyPatternSnapshot(
         currentSide.cellColors,
-        currentSide.merges,
-        currentSide.cellMergeIds,
         grid.rows,
         grid.columns,
-        currentSide.selectedBlocks
+        snapshot
       );
-
-      if (result.error === 'no_motif') {
-        window.alert('Color the selected pattern blocks before tiling.');
-        return prev;
-      }
-
-      if (result.error) {
-        return prev;
-      }
 
       return {
         ...prev,
@@ -205,12 +244,13 @@ function App() {
           cellColors: result.cellColors,
           merges: result.merges,
           cellMergeIds: result.cellMergeIds,
+          selectedBlocks: [],
         },
       };
     });
     setEraserMode(false);
     setSelectionMode(false);
-  }, [activeSide, grid]);
+  }, [activeSide, grid, patternClipboard]);
 
   const applyCellStroke = useCallback(
     (index, { allowToggle = false } = {}) => {
@@ -536,6 +576,7 @@ function App() {
         backReport,
         combinedReport: yardageReport,
       });
+      setHasDownloadedDesign(true);
     } catch (error) {
       console.error('Failed to generate PDF:', error);
     } finally {
@@ -594,6 +635,11 @@ function App() {
 
   const handleDownloadPdf = useCallback(() => {
     if (!grid || !yardageReport?.colors?.length) {
+      return;
+    }
+
+    if (!PAYWALL_ENABLED) {
+      executePdfDownload();
       return;
     }
 
@@ -923,73 +969,105 @@ function App() {
                 />
               </section>
 
-              <section className="abby-patch__repeat abby-patch__panel" aria-label="Repeat pattern">
-                <h2 className="abby-patch__section-title">Repeat pattern — {activeSideLabel}</h2>
-                <p className="abby-patch__repeat-desc">
-                  Select the blocks that make up your pattern, color them, then tile across the
-                  whole quilt.
-                </p>
-                <div className="abby-patch__repeat-controls">
-                  <button
-                    type="button"
-                    className={`abby-patch__tool-button ${selectionMode ? 'abby-patch__tool-button--active' : ''}`}
-                    onClick={handleToggleSelectionMode}
-                    aria-pressed={selectionMode}
-                  >
-                    Select blocks
-                  </button>
-                  <button
-                    type="button"
-                    className="abby-patch__tool-button"
-                    onClick={handleSelectAllColored}
-                    disabled={!coloredBlockCount}
-                  >
-                    Select all colored
-                  </button>
-                  <button
-                    type="button"
-                    className="abby-patch__tool-button"
-                    onClick={handleClearSelection}
-                    disabled={!selectedBlocks.length}
-                  >
-                    Clear selection
-                  </button>
-                  <button
-                    type="button"
-                    className="abby-patch__tool-button"
-                    onClick={handleMergeSquares}
-                    disabled={!selectedBlocks.length}
-                  >
-                    Merge squares
-                  </button>
-                  <button
-                    type="button"
-                    className="abby-patch__tool-button"
-                    onClick={handleUnmergeSquares}
-                    disabled={!selectedBlocks.length}
-                  >
-                    Unmerge
-                  </button>
-                  <button
-                    type="button"
-                    className="abby-patch__button abby-patch__button--tile"
-                    onClick={handleTilePattern}
-                    disabled={!selectedBlocks.length}
-                  >
-                    Tile pattern
-                  </button>
-                </div>
-                <p className="abby-patch__repeat-hint">
-                  {selectedBlocks.length > 0
-                    ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — merge same-color rectangles, or tile as a repeating pattern.`
-                    : 'Turn on Select blocks, then click or drag to choose blocks. Click a selected block again to deselect it.'}
-                </p>
-              </section>
+              <div className="abby-patch__pattern-tools">
+                <section
+                  className="abby-patch__tool-box abby-patch__panel"
+                  aria-label="Merge squares"
+                >
+                  <h2 className="abby-patch__section-title">Merge squares — {activeSideLabel}</h2>
+                  <p className="abby-patch__tool-box-desc">
+                    Select same-color blocks, then merge them into one cut piece.
+                  </p>
+                  <div className="abby-patch__tool-box-controls">
+                    <button
+                      type="button"
+                      className="abby-patch__tool-button"
+                      onClick={handleMergeSquares}
+                      disabled={!selectedBlocks.length}
+                    >
+                      Merge squares
+                    </button>
+                    <button
+                      type="button"
+                      className="abby-patch__tool-button"
+                      onClick={handleUnmergeSquares}
+                      disabled={!selectedBlocks.length}
+                    >
+                      Unmerge
+                    </button>
+                  </div>
+                  <p className="abby-patch__tool-box-hint">
+                    {selectedBlocks.length > 0
+                      ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected.`
+                      : 'Use Select blocks in Copy & paste to choose squares.'}
+                  </p>
+                </section>
+
+                <section
+                  className="abby-patch__tool-box abby-patch__panel"
+                  aria-label="Copy and paste"
+                >
+                  <h2 className="abby-patch__section-title">Copy &amp; paste — {activeSideLabel}</h2>
+                  <p className="abby-patch__tool-box-desc">
+                    Select a pattern, copy it, then paste it across the whole quilt.
+                  </p>
+                  <div className="abby-patch__tool-box-controls">
+                    <button
+                      type="button"
+                      className={`abby-patch__tool-button ${selectionMode ? 'abby-patch__tool-button--active' : ''}`}
+                      onClick={handleToggleSelectionMode}
+                      aria-pressed={selectionMode}
+                    >
+                      Select blocks
+                    </button>
+                    <button
+                      type="button"
+                      className="abby-patch__tool-button"
+                      onClick={handleSelectAllColored}
+                      disabled={!coloredBlockCount}
+                    >
+                      Select all colored
+                    </button>
+                    <button
+                      type="button"
+                      className="abby-patch__tool-button"
+                      onClick={handleClearSelection}
+                      disabled={!selectedBlocks.length}
+                    >
+                      Clear selection
+                    </button>
+                    <button
+                      type="button"
+                      className="abby-patch__tool-button"
+                      onClick={handleCopyPattern}
+                      disabled={!selectedBlocks.length}
+                    >
+                      Copy pattern
+                    </button>
+                    <button
+                      type="button"
+                      className="abby-patch__button abby-patch__button--tile"
+                      onClick={handlePastePattern}
+                      disabled={!copiedPattern && !selectedBlocks.length}
+                    >
+                      Paste across quilt
+                    </button>
+                  </div>
+                  <p className="abby-patch__tool-box-hint">
+                    {copiedPattern
+                      ? `${copiedPattern.width}×${copiedPattern.height} pattern ready to paste.`
+                      : selectedBlocks.length > 0
+                        ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — copy or paste across the quilt.`
+                        : 'Turn on Select blocks, then click or drag to choose your pattern.'}
+                  </p>
+                </section>
+              </div>
 
               <div className="abby-patch__yardage-panel-wrap">
                 <YardagePanel
                   grid={grid}
                   yardageReport={yardageReport}
+                  showYardage={hasDownloadedDesign}
                   isDownloadingPdf={isDownloadingPdf}
                   downloadPricingMessage={downloadPricingMessage}
                   onDownloadPdf={handleDownloadPdf}
@@ -1018,13 +1096,13 @@ function App() {
           )}
         </div>
       )}
-      {accessModal === 'free' && (
+      {PAYWALL_ENABLED && accessModal === 'free' && (
         <FreePatternModal
           initialEmail={savedEmail}
           onSubmit={handleFreePatternSubmit}
         />
       )}
-      {accessModal === 'paywall' && (
+      {PAYWALL_ENABLED && accessModal === 'paywall' && (
         <PaywallModal
           initialEmail={savedEmail}
           onClose={() => setAccessModal(null)}

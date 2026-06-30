@@ -74,10 +74,25 @@ async function requestCheckoutSession(payload) {
   throw lastNetworkError || new Error('Could not reach checkout server.');
 }
 
+function assertProductionCheckoutConfigured() {
+  if (process.env.NODE_ENV === 'development') {
+    return;
+  }
+
+  const apiUrl = process.env.REACT_APP_CHECKOUT_API_URL?.trim();
+  if (!apiUrl) {
+    throw new Error(
+      'Online checkout is not configured yet. Deploy the Stripe server (see render.yaml), add the URL as GitHub secret REACT_APP_CHECKOUT_API_URL, then redeploy the site.'
+    );
+  }
+}
+
 export async function startStripeCheckout({ mode, email }) {
   if (mode !== 'payment' && mode !== 'subscription') {
     throw new Error('Invalid checkout mode.');
   }
+
+  assertProductionCheckoutConfigured();
 
   const origin = window.location.origin;
   const pathname = window.location.pathname;

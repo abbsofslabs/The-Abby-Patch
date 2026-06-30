@@ -29,21 +29,20 @@ export function getSelectionBounds(indices, columns) {
   };
 }
 
-export function applyTileFromSelection(
+export function extractPatternSnapshot(
   cellColors,
   merges,
   cellMergeIds,
-  rows,
   columns,
   selectedIndices
 ) {
   if (!selectedIndices.length) {
-    return { cellColors, merges, cellMergeIds, error: 'no_selection' };
+    return { error: 'no_selection' };
   }
 
   const bounds = getSelectionBounds(selectedIndices, columns);
   if (!bounds) {
-    return { cellColors, merges, cellMergeIds, error: 'no_selection' };
+    return { error: 'no_selection' };
   }
 
   const { minRow, minCol, width, height } = bounds;
@@ -55,24 +54,76 @@ export function applyTileFromSelection(
   });
 
   if (!pattern.some((color) => color != null)) {
-    return { cellColors, merges, cellMergeIds, error: 'no_motif' };
+    return { error: 'no_motif' };
   }
 
+  const patternMerges = {};
+  const patternCellMergeIds = Array(height * width).fill(null);
+
+  Object.values(merges).forEach((merge) => {
+    if (
+      merge.minRow >= minRow &&
+      merge.minRow + merge.height <= minRow + height &&
+      merge.minCol >= minCol &&
+      merge.minCol + merge.width <= minCol + width
+    ) {
+      const relMinRow = merge.minRow - minRow;
+      const relMinCol = merge.minCol - minCol;
+      patternMerges[merge.id] = {
+        ...merge,
+        minRow: relMinRow,
+        minCol: relMinCol,
+        cells: merge.cells.map((index) => {
+          const row = Math.floor(index / columns) - minRow;
+          const col = (index % columns) - minCol;
+          return row * width + col;
+        }),
+      };
+      merge.cells.forEach((index) => {
+        const row = Math.floor(index / columns) - minRow;
+        const col = (index % columns) - minCol;
+        patternCellMergeIds[row * width + col] = merge.id;
+      });
+    }
+  });
+
+  return {
+    pattern,
+    merges: patternMerges,
+    cellMergeIds: patternCellMergeIds,
+    width,
+    height,
+    anchorRow: minRow,
+    anchorCol: minCol,
+    error: null,
+  };
+}
+
+export function applyPatternSnapshot(cellColors, rows, columns, snapshot) {
+  const {
+    pattern,
+    merges: patternMerges,
+    width,
+    height,
+    anchorRow = 0,
+    anchorCol = 0,
+  } = snapshot;
   const next = [...cellColors];
+
   for (let index = 0; index < rows * columns; index += 1) {
     const row = Math.floor(index / columns);
     const col = index % columns;
-    const rowOffset = ((row - minRow) % height + height) % height;
-    const colOffset = ((col - minCol) % width + width) % width;
+    const rowOffset = ((row - anchorRow) % height + height) % height;
+    const colOffset = ((col - anchorCol) % width + width) % width;
     next[index] = pattern[rowOffset * width + colOffset];
   }
 
   const tiledMerges = tileMergesFromSelection(
-    merges,
+    patternMerges,
     rows,
     columns,
-    minRow,
-    minCol,
+    anchorRow,
+    anchorCol,
     width,
     height
   );
@@ -83,6 +134,29 @@ export function applyTileFromSelection(
     cellMergeIds: tiledMerges.cellMergeIds,
     error: null,
   };
+}
+
+export function applyTileFromSelection(
+  cellColors,
+  merges,
+  cellMergeIds,
+  rows,
+  columns,
+  selectedIndices
+) {
+  const snapshot = extractPatternSnapshot(
+    cellColors,
+    merges,
+    cellMergeIds,
+    columns,
+    selectedIndices
+  );
+
+  if (snapshot.error) {
+    return { cellColors, merges, cellMergeIds, error: snapshot.error };
+  }
+
+  return applyPatternSnapshot(cellColors, rows, columns, snapshot);
 }
 
 export function getColoredBlockIndices(cellColors) {
