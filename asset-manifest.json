@@ -1,0 +1,20 @@
+{
+  "files": {
+    "main.css": "./static/css/main.6585ae1e.css",
+    "main.js": "./static/js/main.7f20537e.js",
+    "static/js/977.764abd17.chunk.js": "./static/js/977.764abd17.chunk.js",
+    "static/js/455.c7185638.chunk.js": "./static/js/455.c7185638.chunk.js",
+    "static/js/453.47da1a78.chunk.js": "./static/js/453.47da1a78.chunk.js",
+    "static/media/abby-patch-logo.png": "./static/media/abby-patch-logo.98f6edce0bec0b770380.png",
+    "index.html": "./index.html",
+    "main.6585ae1e.css.map": "./static/css/main.6585ae1e.css.map",
+    "main.7f20537e.js.map": "./static/js/main.7f20537e.js.map",
+    "977.764abd17.chunk.js.map": "./static/js/977.764abd17.chunk.js.map",
+    "455.c7185638.chunk.js.map": "./static/js/455.c7185638.chunk.js.map",
+    "453.47da1a78.chunk.js.map": "./static/js/453.47da1a78.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.6585ae1e.css",
+    "static/js/main.7f20537e.js"
+  ]
+}
