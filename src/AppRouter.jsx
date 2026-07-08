@@ -5,9 +5,17 @@ import Designer from './pages/Designer';
 import LandingPage from './pages/LandingPage';
 import StorePortal from './pages/StorePortal';
 
+function getRouterBasename() {
+  const publicUrl = process.env.PUBLIC_URL || '';
+  if (!publicUrl || publicUrl === '.') {
+    return '/';
+  }
+  return publicUrl.endsWith('/') ? publicUrl.slice(0, -1) : publicUrl;
+}
+
 export default function AppRouter() {
   return (
-    <BrowserRouter basename={process.env.PUBLIC_URL || '/'}>
+    <BrowserRouter basename={getRouterBasename()}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth" element={<AuthPage />} />

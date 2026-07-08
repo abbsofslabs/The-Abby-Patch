@@ -4,10 +4,5 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "installCommand": "npm install --no-audit --no-fund",
-  "rewrites": [{ "source": "/((?!static/).*)", "destination": "/index.html" }],
-  "build": {
-    "env": {
-      "CI": "false"
-    }
-  }
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
