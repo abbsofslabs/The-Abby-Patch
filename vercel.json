@@ -4,5 +4,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "installCommand": "npm install --no-audit --no-fund",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "env": {
+    "REACT_APP_SUPABASE_URL": "https://owlbtvtptenxtuqahogp.supabase.co",
+    "REACT_APP_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93bGJ0dnRwdGVueHR1cWFob2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzODU5NjksImV4cCI6MjA5ODk2MTk2OX0.vco_4bcok3ylz5BXlqAhGXM8J1yoIHWwiWv3FySgEYE"
+  }
 }
