@@ -125,7 +125,13 @@ export function dissolveMergesTouchingIndices(merges, cellMergeIds, indices) {
   return next;
 }
 
-export function mergeSelectedBlocks(cellColors, selectedIndices, columns, merges, cellMergeIds) {
+export function mergeSelectedBlocks(
+  cellColors,
+  selectedIndices,
+  columns,
+  merges,
+  cellMergeIds
+) {
   const validation = validateMergeSelection(cellColors, selectedIndices, columns);
   if (!validation.ok) {
     return { ok: false, message: validation.message };
@@ -293,6 +299,7 @@ export function extractCutPieces(cellColors, merges, cellFinishedWidth, cellFini
     if (!color || covered.has(index)) {
       return;
     }
+
     pieces.push({
       color: color.toLowerCase(),
       finishedWidth: cellFinishedWidth,

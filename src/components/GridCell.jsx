@@ -9,14 +9,32 @@ function GridCell({
   sideLabel,
   onCellPointerDown,
   onCellPointerEnter,
+  onCellPointerUp,
 }) {
   const handlePointerDown = useCallback(
     (event) => {
+      if (event.button !== 0) {
+        return;
+      }
       event.preventDefault();
       onCellPointerDown(index);
     },
     [index, onCellPointerDown]
   );
+
+  const handlePointerUp = useCallback(
+    (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      onCellPointerUp(index);
+    },
+    [index, onCellPointerUp]
+  );
+
+  const handleContextMenu = useCallback((event) => {
+    event.preventDefault();
+  }, []);
 
   const handlePointerEnter = useCallback(() => {
     onCellPointerEnter(index);
@@ -47,6 +65,8 @@ function GridCell({
       style={{ backgroundColor }}
       onPointerDown={handlePointerDown}
       onPointerEnter={handlePointerEnter}
+      onPointerUp={handlePointerUp}
+      onContextMenu={handleContextMenu}
       aria-label={`${sideLabel} patch ${index + 1}${color ? `, color ${color}` : ', empty'}${isSelected ? ', selected' : ''}${mergeLabel ? `, merged ${mergeLabel}` : ''}`}
       aria-pressed={isSelected}
     >

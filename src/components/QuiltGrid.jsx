@@ -15,6 +15,7 @@ function QuiltGrid({
   sideLabel,
   onCellPointerDown,
   onCellPointerEnter,
+  onCellPointerUp,
 }) {
   const gridStyle = useMemo(
     () => ({
@@ -51,6 +52,7 @@ function QuiltGrid({
           sideLabel={sideLabel}
           onCellPointerDown={onCellPointerDown}
           onCellPointerEnter={onCellPointerEnter}
+          onCellPointerUp={onCellPointerUp}
         />
       ))}
     </div>

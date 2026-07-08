@@ -115,7 +115,8 @@ export function applyPatternSnapshot(cellColors, rows, columns, snapshot) {
     const col = index % columns;
     const rowOffset = ((row - anchorRow) % height + height) % height;
     const colOffset = ((col - anchorCol) % width + width) % width;
-    next[index] = pattern[rowOffset * width + colOffset];
+    const patternIndex = rowOffset * width + colOffset;
+    next[index] = pattern[patternIndex];
   }
 
   const tiledMerges = tileMergesFromSelection(

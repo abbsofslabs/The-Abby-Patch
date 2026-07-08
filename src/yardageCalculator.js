@@ -4,12 +4,17 @@ export const FABRIC_WIDTH = 44;
 export const YARD_LENGTH = 36;
 export const SQ_IN_PER_YARD = YARD_LENGTH * FABRIC_WIDTH;
 export const SEAM_ALLOWANCE_PER_SIDE = 0.25;
+export const DEFAULT_SEAM_ALLOWANCE = SEAM_ALLOWANCE_PER_SIDE;
 export const MAX_GRID_SIZE = 60;
 
-export function getCutBlockSize(blockWidth, blockHeight) {
+export function getCutBlockSize(
+  blockWidth,
+  blockHeight,
+  seamAllowance = DEFAULT_SEAM_ALLOWANCE
+) {
   return {
-    width: blockWidth + 2 * SEAM_ALLOWANCE_PER_SIDE,
-    height: blockHeight + 2 * SEAM_ALLOWANCE_PER_SIDE,
+    width: blockWidth + 2 * seamAllowance,
+    height: blockHeight + 2 * seamAllowance,
   };
 }
 
@@ -139,7 +144,7 @@ export function calculateColorYardage(count, finishedBlockWidth, finishedBlockHe
   };
 }
 
-export function calculatePiecesYardage(pieces) {
+export function calculatePiecesYardage(pieces, seamAllowance = DEFAULT_SEAM_ALLOWANCE) {
   if (!pieces.length) {
     return { yards: 0, sqInWithSeam: 0, cutPieces: [] };
   }
@@ -147,7 +152,11 @@ export function calculatePiecesYardage(pieces) {
   const grouped = new Map();
 
   pieces.forEach((piece) => {
-    const { width: cutW, height: cutH } = getCutBlockSize(piece.finishedWidth, piece.finishedHeight);
+    const { width: cutW, height: cutH } = getCutBlockSize(
+      piece.finishedWidth,
+      piece.finishedHeight,
+      seamAllowance
+    );
     const key = `${piece.color}|${normalizeCutKey(cutW, cutH)}`;
     const existing = grouped.get(key);
     if (existing) {
@@ -164,7 +173,11 @@ export function calculatePiecesYardage(pieces) {
     }
   });
 
-  const cutPieces = [...grouped.values()];
+  const cutPieces = [...grouped.values()].map((group) => ({
+    ...group,
+    label: `${formatDimension(group.finishedWidth)}×${formatDimension(group.finishedHeight)}″`,
+  }));
+
   let totalSqIn = 0;
   let totalYards = 0;
   let hasCuttingWaste = false;
@@ -209,7 +222,7 @@ export function countColorsByHex(cellColors) {
   return counts;
 }
 
-function buildSideYardageFromPieces(pieces) {
+function buildSideYardageFromPieces(pieces, seamAllowance) {
   const byColor = new Map();
   pieces.forEach((piece) => {
     if (!byColor.has(piece.color)) {
@@ -220,7 +233,7 @@ function buildSideYardageFromPieces(pieces) {
 
   const colors = [...byColor.entries()]
     .map(([color, colorPieces]) => {
-      const yardage = calculatePiecesYardage(colorPieces);
+      const yardage = calculatePiecesYardage(colorPieces, seamAllowance);
       return {
         color,
         count: colorPieces.length,
@@ -240,18 +253,24 @@ export function buildYardageReport(
   quiltWidth,
   quiltHeight,
   columns,
-  rows
+  rows,
+  seamAllowance = DEFAULT_SEAM_ALLOWANCE
 ) {
   const blockSize = calculateBlockSize(quiltWidth, quiltHeight, columns, rows);
   if (!blockSize) {
-    return { blockSize: null, colors: [], totalYards: 0, cutPieces: [] };
+    return { blockSize: null, colors: [], totalYards: 0, cutPieces: [], seamAllowance };
   }
 
-  const pieces = extractCutPieces(cellColors, merges || {}, blockSize.width, blockSize.height);
-  const { colors, totalYards } = buildSideYardageFromPieces(pieces);
+  const pieces = extractCutPieces(
+    cellColors,
+    merges || {},
+    blockSize.width,
+    blockSize.height
+  );
+  const { colors, totalYards } = buildSideYardageFromPieces(pieces, seamAllowance);
   const allCutPieces = colors.flatMap((row) => row.cutPieces || []);
 
-  return { blockSize, colors, totalYards, cutPieces: allCutPieces, pieces };
+  return { blockSize, colors, totalYards, cutPieces: allCutPieces, pieces, seamAllowance };
 }
 
 export function buildCombinedYardageReport(
@@ -262,7 +281,8 @@ export function buildCombinedYardageReport(
   quiltWidth,
   quiltHeight,
   columns,
-  rows
+  rows,
+  seamAllowance = DEFAULT_SEAM_ALLOWANCE
 ) {
   const blockSize = calculateBlockSize(quiltWidth, quiltHeight, columns, rows);
   if (!blockSize) {
@@ -273,6 +293,7 @@ export function buildCombinedYardageReport(
       frontTotalYards: 0,
       backTotalYards: 0,
       cutPieces: [],
+      seamAllowance,
     };
   }
 
@@ -282,7 +303,8 @@ export function buildCombinedYardageReport(
     quiltWidth,
     quiltHeight,
     columns,
-    rows
+    rows,
+    seamAllowance
   );
   const backReport = buildYardageReport(
     backCellColors,
@@ -290,12 +312,23 @@ export function buildCombinedYardageReport(
     quiltWidth,
     quiltHeight,
     columns,
-    rows
+    rows,
+    seamAllowance
   );
 
   const allPieces = [
-    ...extractCutPieces(frontCellColors, frontMerges || {}, blockSize.width, blockSize.height),
-    ...extractCutPieces(backCellColors, backMerges || {}, blockSize.width, blockSize.height),
+    ...extractCutPieces(
+      frontCellColors,
+      frontMerges || {},
+      blockSize.width,
+      blockSize.height
+    ),
+    ...extractCutPieces(
+      backCellColors,
+      backMerges || {},
+      blockSize.width,
+      blockSize.height
+    ),
   ];
 
   const byColor = new Map();
@@ -323,7 +356,7 @@ export function buildCombinedYardageReport(
 
   const colors = [...byColor.values()]
     .map((entry) => {
-      const yardage = calculatePiecesYardage(entry.pieces);
+      const yardage = calculatePiecesYardage(entry.pieces, seamAllowance);
       return {
         color: entry.color,
         frontCount: entry.frontCount,
@@ -343,6 +376,7 @@ export function buildCombinedYardageReport(
     frontTotalYards: frontReport.totalYards,
     backTotalYards: backReport.totalYards,
     cutPieces: colors.flatMap((row) => row.cutPieces || []),
+    seamAllowance,
   };
 }
 

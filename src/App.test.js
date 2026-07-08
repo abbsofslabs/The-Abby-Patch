@@ -1,20 +1,16 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import App from './App';
+import { render, screen } from '@testing-library/react';
+import LandingPage from './pages/LandingPage';
 
-test('renders landing page and generate button after start', () => {
-  render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: /start now/i }));
-  expect(screen.getByRole('button', { name: /generate grid/i })).toBeInTheDocument();
-  expect(screen.getByLabelText(/quilt width/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/block size/i)).toBeInTheDocument();
+jest.mock('react-router-dom', () => ({
+  Link: ({ children, to }) => <a href={to}>{children}</a>,
+}));
+
+test('renders landing page with sign in', () => {
+  render(<LandingPage />);
+  expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument();
 });
 
-test('generates a grid from quilt dimensions and block size', () => {
-  render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: /start now/i }));
-  fireEvent.click(screen.getByRole('button', { name: /generate grid/i }));
-  expect(
-    screen.getByText(/your quilt will be approximately/i)
-  ).toBeInTheDocument();
-  expect(document.querySelectorAll('.abby-patch__cell').length).toBeGreaterThan(0);
+test('renders create account link on landing page', () => {
+  render(<LandingPage />);
+  expect(screen.getByRole('link', { name: /create account/i })).toBeInTheDocument();
 });

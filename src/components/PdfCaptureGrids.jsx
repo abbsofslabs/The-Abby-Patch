@@ -27,11 +27,7 @@ const PdfGrid = memo(
             .join(' ');
 
           return (
-            <div
-              key={index}
-              className={className}
-              style={{ backgroundColor: color || CREAM }}
-            />
+            <div key={index} className={className} style={{ backgroundColor: color || CREAM }} />
           );
         })}
       </div>

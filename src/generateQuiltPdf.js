@@ -153,12 +153,12 @@ function drawSwatchLabel(pdf, x, y, color, label, swatchSize = SWATCH_SIZE, maxL
   });
 }
 
-function formatCuttingInstruction(count, cutWidth, cutHeight) {
-  const unit = cutWidth === cutHeight ? 'squares' : 'rectangles';
-  return `Cut ${count} ${unit} at ${formatDimension(cutWidth)} × ${formatDimension(cutHeight)} inches`;
+function formatCuttingInstruction(piece) {
+  const unit = piece.cutWidth === piece.cutHeight ? 'squares' : 'rectangles';
+  return `Cut ${piece.count} ${unit} at ${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} inches`;
 }
 
-function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle) {
+function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, seamAllowance) {
   const rows = colors.filter((row) => (row.cutPieces?.length ? row.cutPieces : []).some((p) => p.count > 0));
   if (!rows.length || !blockSize) {
     return;
@@ -181,7 +181,7 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle) {
   writeWrappedText(
     ctx,
     `Grid cell: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in finished. ` +
-      `Merged pieces use one seam allowance on outer edges only (${formatDimension(SEAM_ALLOWANCE_PER_SIDE)} in per side). ` +
+      `Merged pieces use one seam allowance on outer edges only (${formatDimension(seamAllowance)} in per side). ` +
       `Yardage assumes 44 in usable width and allows rotating rectangles.`,
     MARGIN,
     CONTENT_WIDTH,
@@ -193,7 +193,7 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle) {
     const cutPieces = row.cutPieces || [];
     const instructions = cutPieces
       .filter((piece) => piece.count > 0)
-      .map((piece) => formatCuttingInstruction(piece.count, piece.cutWidth, piece.cutHeight));
+      .map((piece) => formatCuttingInstruction(piece));
 
     if (!instructions.length) {
       return;
@@ -395,7 +395,8 @@ export async function generateQuiltPdf({
     frontReport.colors,
     colorLabels,
     frontReport.blockSize,
-    'Front cutting guide'
+    'Front cutting guide',
+    frontReport.seamAllowance ?? SEAM_ALLOWANCE_PER_SIDE
   );
 
   drawSectionHeading(ctx, 'Back');
@@ -411,7 +412,8 @@ export async function generateQuiltPdf({
     backReport.colors,
     colorLabels,
     backReport.blockSize,
-    'Back cutting guide'
+    'Back cutting guide',
+    backReport.seamAllowance ?? SEAM_ALLOWANCE_PER_SIDE
   );
 
   ctx.ensureSpace(SECTION_FONT + CUTTING_ROW_HEIGHT * 2);

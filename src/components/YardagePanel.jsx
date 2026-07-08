@@ -1,15 +1,21 @@
 import { memo } from 'react';
+import { formatCurrency } from '../utils/fabricPricing';
 import { formatDimension, formatYards } from '../yardageCalculator';
 
 function YardagePanel({
   grid,
   yardageReport,
+  fabricLines = [],
+  totalFabricCost = 0,
+  seamAllowance,
   showYardage,
   isDownloadingPdf,
   downloadPricingMessage,
   onDownloadPdf,
 }) {
   const hasColoredBlocks = yardageReport && yardageReport.colors.length > 0;
+  const cutSummary = yardageReport?.cutPieces ?? [];
+  const hasFabricPricing = fabricLines.length > 0;
 
   return (
     <section
@@ -43,10 +49,31 @@ function YardagePanel({
 
       {showYardage && (
         <p className="abby-patch__yardage-note abby-patch__yardage-note--inline">
-          Cut sizes include {formatDimension(0.25)}&Prime; seam allowance on outer edges only (merged
-          pieces count as one cut). Yardage uses 44&Prime; usable width, allows rotating rectangles,
-          and is rounded up to the nearest &frac14; yard. Totals combine both quilt sides.
+          Cut sizes include {formatDimension(seamAllowance)}&Prime; seam allowance per side on outer
+          edges only (merged pieces count as one cut). Yardage uses 44&Prime; usable width, allows
+          rotating rectangles, and is rounded up to the nearest &frac14; yard. Totals combine both
+          quilt sides.
         </p>
+      )}
+
+      {showYardage && cutSummary.length > 0 && (
+        <div className="abby-patch__cut-list">
+          <h3 className="abby-patch__cut-list-title">Cut list</h3>
+          <ul className="abby-patch__cut-list-items">
+            {cutSummary.map((piece) => (
+              <li key={`${piece.color}-${piece.label}-${piece.count}`}>
+                <span
+                  className="abby-patch__swatch"
+                  style={{ backgroundColor: piece.color }}
+                  aria-hidden="true"
+                />
+                <span>
+                  {piece.label} — {piece.count}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {showYardage && hasColoredBlocks ? (
@@ -114,6 +141,53 @@ function YardagePanel({
             Color blocks on the front and/or back to see combined fabric yardage estimates.
           </p>
         )
+      )}
+
+      {showYardage && hasFabricPricing && (
+        <div className="abby-patch__fabric-pricing">
+          <h3 className="abby-patch__cut-list-title">Store fabric pricing</h3>
+          <div className="abby-patch__yardage-table-wrapper">
+            <table className="abby-patch__yardage-table abby-patch__fabric-pricing-table">
+              <thead>
+                <tr>
+                  <th scope="col">Fabric</th>
+                  <th scope="col">Store</th>
+                  <th scope="col">Yards</th>
+                  <th scope="col">$/yd</th>
+                  <th scope="col">Line total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fabricLines.map((line) => (
+                  <tr key={line.fabricId}>
+                    <td>
+                      <span className="abby-patch__fabric-pricing-name">
+                        {line.imageUrl && (
+                          <img src={line.imageUrl} alt="" className="abby-patch__fabric-thumb" />
+                        )}
+                        <span>{line.name}</span>
+                      </span>
+                    </td>
+                    <td>{line.storeName}</td>
+                    <td>{formatYards(line.yards)}</td>
+                    <td>{formatCurrency(line.pricePerYard)}</td>
+                    <td>{formatCurrency(line.cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="abby-patch__yardage-total">
+                  <td colSpan="4">Estimated fabric cost (store fabrics only)</td>
+                  <td>{formatCurrency(totalFabricCost)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="abby-patch__yardage-note">
+            Pricing applies only to blocks painted with store fabrics. Preset and custom colors are
+            not priced here.
+          </p>
+        </div>
       )}
 
       {downloadPricingMessage && (
