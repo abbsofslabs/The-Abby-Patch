@@ -31,7 +31,8 @@
     "start": "cross-env PORT=3000 react-scripts start",
     "server": "node server/index.js",
     "dev": "concurrently -n stripe,app -c blue,green \"npm run server\" \"npm run start\"",
-    "build": "react-scripts build",
+    "build": "node scripts/vercel-build.js",
+    "vercel-build": "node scripts/vercel-build.js",
     "postbuild": "node -e \"require('fs').copyFileSync('build/index.html','build/404.html')\"",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -59,6 +60,6 @@
     "cross-env": "^7.0.3"
   },
   "engines": {
-    "node": ">=18"
+    "node": "20.x"
   }
 }

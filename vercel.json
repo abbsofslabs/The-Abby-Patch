@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "CI=false npm run build",
+  "buildCommand": "npm run vercel-build",
   "outputDirectory": "build",
-  "installCommand": "npm install --no-audit --no-fund",
+  "installCommand": "npm install --no-audit --no-fund --legacy-peer-deps",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "env": {
     "REACT_APP_SUPABASE_URL": "https://owlbtvtptenxtuqahogp.supabase.co",
