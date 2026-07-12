@@ -1,4 +1,4 @@
-import { tileMergesFromSelection } from './mergeUtils';
+import { tileMergesFromSelection, parsePieceKey, pieceKey } from './mergeUtils';
 
 export function getSelectionBounds(indices, columns) {
   if (!indices.length) {
@@ -61,7 +61,10 @@ export function extractPatternSnapshot(
   const patternCellMergeIds = Array(height * width).fill(null);
 
   Object.values(merges).forEach((merge) => {
+    // Only full-cell merges tile cleanly; triangle-half merges stay behind.
+    const hasHalfPieces = merge.pieces?.some((piece) => piece.half != null);
     if (
+      !hasHalfPieces &&
       merge.minRow >= minRow &&
       merge.minRow + merge.height <= minRow + height &&
       merge.minCol >= minCol &&
@@ -71,6 +74,7 @@ export function extractPatternSnapshot(
       const relMinCol = merge.minCol - minCol;
       patternMerges[merge.id] = {
         ...merge,
+        pieces: null,
         minRow: relMinRow,
         minCol: relMinCol,
         cells: merge.cells.map((index) => {
@@ -133,6 +137,7 @@ export function applyPatternSnapshot(cellColors, rows, columns, snapshot) {
     cellColors: next,
     merges: tiledMerges.merges,
     cellMergeIds: tiledMerges.cellMergeIds,
+    pieceMergeIds: tiledMerges.pieceMergeIds,
     error: null,
   };
 }
@@ -164,6 +169,70 @@ export function getColoredBlockIndices(cellColors) {
   return cellColors
     .map((color, index) => (color ? index : null))
     .filter((index) => index != null);
+}
+
+export function getColoredPieceKeys(cellColors, cellColorsB = [], cellDiagonals = []) {
+  const keys = [];
+  cellColors.forEach((color, index) => {
+    if (cellDiagonals[index]) {
+      if (color) {
+        keys.push(pieceKey(index, 'a'));
+      }
+      if (cellColorsB[index]) {
+        keys.push(pieceKey(index, 'b'));
+      }
+      return;
+    }
+    if (color) {
+      keys.push(pieceKey(index, null));
+    }
+  });
+  return keys;
+}
+
+/** Migrate legacy numeric cell selections to piece keys. */
+export function normalizeSelectedPieces(selected, cellDiagonals = []) {
+  if (!Array.isArray(selected) || !selected.length) {
+    return [];
+  }
+
+  const keys = [];
+  selected.forEach((item) => {
+    if (typeof item === 'number') {
+      if (cellDiagonals[item]) {
+        keys.push(pieceKey(item, 'a'), pieceKey(item, 'b'));
+      } else {
+        keys.push(pieceKey(item, null));
+      }
+      return;
+    }
+    if (typeof item === 'string' && item.includes(':')) {
+      keys.push(item);
+    }
+  });
+
+  return [...new Set(keys)].sort();
+}
+
+export function selectedPiecesToCellIndices(selectedPieces) {
+  return [
+    ...new Set(
+      (selectedPieces || []).map((item) =>
+        typeof item === 'number' ? item : parsePieceKey(item).index
+      )
+    ),
+  ].sort((a, b) => a - b);
+}
+
+export function addPieceSelections(selectedPieces, keys) {
+  const set = new Set(selectedPieces);
+  keys.forEach((key) => set.add(key));
+  return [...set].sort();
+}
+
+export function removePieceSelections(selectedPieces, keys) {
+  const remove = new Set(keys);
+  return selectedPieces.filter((key) => !remove.has(key));
 }
 
 export function addBlockSelection(selectedBlocks, index) {

@@ -154,6 +154,10 @@ function drawSwatchLabel(pdf, x, y, color, label, swatchSize = SWATCH_SIZE, maxL
 }
 
 function formatCuttingInstruction(piece) {
+  if (piece.shape === 'triangle') {
+    const squares = piece.squaresNeeded ?? Math.ceil(piece.count / 2);
+    return `Cut ${piece.count} half-square triangle${piece.count === 1 ? '' : 's'} (from ${squares} square${squares === 1 ? '' : 's'} at ${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} inches)`;
+  }
   const unit = piece.cutWidth === piece.cutHeight ? 'squares' : 'rectangles';
   return `Cut ${piece.count} ${unit} at ${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} inches`;
 }
@@ -182,6 +186,7 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, sea
     ctx,
     `Grid cell: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in finished. ` +
       `Merged pieces use one seam allowance on outer edges only (${formatDimension(seamAllowance)} in per side). ` +
+      `Half-square triangles use the classic finished + 7/8 in cut square at 1/4 in seam allowance (scaled with your seam setting); two matching HSTs share one cut square. ` +
       `Yardage assumes 44 in usable width and allows rotating rectangles.`,
     MARGIN,
     CONTENT_WIDTH,

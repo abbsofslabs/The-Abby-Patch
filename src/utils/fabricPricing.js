@@ -26,9 +26,13 @@ function groupCellsByFabricKey(cellColors, cellFabricIds) {
 export function buildFabricPricingReport({
   frontCellColors,
   frontCellFabricIds,
+  frontCellColorsB,
+  frontCellDiagonals,
   frontMerges,
   backCellColors,
   backCellFabricIds,
+  backCellColorsB,
+  backCellDiagonals,
   backMerges,
   quiltWidth,
   quiltHeight,
@@ -46,7 +50,13 @@ export function buildFabricPricingReport({
     quiltHeight,
     columns,
     rows,
-    seamAllowance
+    seamAllowance,
+    {
+      frontCellColorsB,
+      frontCellDiagonals,
+      backCellColorsB,
+      backCellDiagonals,
+    }
   );
 
   const frontGroups = groupCellsByFabricKey(frontCellColors, frontCellFabricIds);

@@ -49,10 +49,11 @@ function YardagePanel({
 
       {showYardage && (
         <p className="abby-patch__yardage-note abby-patch__yardage-note--inline">
-          Cut sizes include {formatDimension(seamAllowance)}&Prime; seam allowance per side on outer
-          edges only (merged pieces count as one cut). Yardage uses 44&Prime; usable width, allows
-          rotating rectangles, and is rounded up to the nearest &frac14; yard. Totals combine both
-          quilt sides.
+          Cut sizes include {formatDimension(seamAllowance)}&Prime; seam allowance on outer edges
+          (merged pieces count as one cut). Half-square triangles use finished + 7/8&Prime; cut squares at
+          1/4&Prime; SA (scaled with your seam setting); matching HSTs pair onto shared squares. Yardage
+          uses 44&Prime; usable width, allows rotating rectangles, and rounds up to the nearest &frac14;
+          yard. Totals combine both quilt sides.
         </p>
       )}
 
@@ -69,6 +70,9 @@ function YardagePanel({
                 />
                 <span>
                   {piece.label} — {piece.count}
+                  {piece.shape === 'triangle'
+                    ? ` (cut ${piece.squaresNeeded} sq @ ${formatDimension(piece.cutWidth)}″)`
+                    : ` @ ${formatDimension(piece.cutWidth)}×${formatDimension(piece.cutHeight)}″ cut`}
                 </span>
               </li>
             ))}

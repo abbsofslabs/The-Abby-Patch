@@ -1,10 +1,14 @@
 import {
   addBlockSelections,
   applyTileFromSelection,
+  extractPatternSnapshot,
   getColoredBlockIndices,
+  getColoredPieceKeys,
+  normalizeSelectedPieces,
   removeBlockSelections,
+  selectedPiecesToCellIndices,
 } from './gridUtils';
-import { mergeSelectedBlocks } from './mergeUtils';
+import { mergePieces, mergeSelectedBlocks, createEmptyPieceMergeIds } from './mergeUtils';
 
 test('tiles the selected pattern across the entire grid', () => {
   const rows = 4;
@@ -86,4 +90,88 @@ test('returns an error when the selected pattern has no color', () => {
   );
 
   expect(error).toBe('no_motif');
+});
+
+test('pattern snapshot skips triangle-half merges and keeps full-cell merges', () => {
+  const cellColors = Array(16).fill('#123456');
+  const cellColorsB = Array(16).fill('#123456');
+  const cellDiagonals = Array(16).fill(null);
+  cellDiagonals[0] = 'nwse';
+
+  // Half-piece merge (0:a + 1) and a full-cell merge (4 + 5).
+  const halfMerge = mergePieces(
+    [
+      { index: 0, half: 'a' },
+      { index: 1, half: null },
+    ],
+    cellColors,
+    cellColorsB,
+    cellDiagonals,
+    4,
+    4,
+    {},
+    createEmptyPieceMergeIds(16)
+  );
+  const fullMerge = mergePieces(
+    [
+      { index: 4, half: null },
+      { index: 5, half: null },
+    ],
+    cellColors,
+    cellColorsB,
+    cellDiagonals,
+    4,
+    4,
+    halfMerge.merges,
+    halfMerge.pieceMergeIds
+  );
+
+  const snapshot = extractPatternSnapshot(
+    cellColors,
+    fullMerge.merges,
+    fullMerge.cellMergeIds,
+    4,
+    [0, 1, 4, 5]
+  );
+
+  expect(snapshot.error).toBeNull();
+  const copied = Object.values(snapshot.merges);
+  expect(copied).toHaveLength(1);
+  expect(copied[0].cells).toEqual([2, 3]);
+});
+
+test('applyTileFromSelection returns pieceMergeIds for pasted merges', () => {
+  const cellColors = Array(16).fill('#aabbcc');
+  const mergeResult = mergeSelectedBlocks(cellColors, [0, 1], 4, {}, Array(16).fill(null));
+
+  const result = applyTileFromSelection(
+    cellColors,
+    mergeResult.merges,
+    mergeResult.cellMergeIds,
+    4,
+    4,
+    [0, 1, 4, 5]
+  );
+
+  expect(result.error).toBeNull();
+  expect(result.pieceMergeIds).toHaveLength(16);
+  expect(result.pieceMergeIds[0].a).toBe(result.cellMergeIds[0]);
+  expect(result.pieceMergeIds[0].b).toBe(result.cellMergeIds[0]);
+});
+
+test('piece selection helpers round-trip halves and cells', () => {
+  const keys = getColoredPieceKeys(
+    ['#ff0000', '#00ff00', null],
+    ['#0000ff', null, null],
+    ['nwse', null, null]
+  );
+  expect(keys).toEqual(['0:a', '0:b', '1:full']);
+
+  expect(normalizeSelectedPieces([0, '2:a'], ['nwse', null, 'nesw'])).toEqual([
+    '0:a',
+    '0:b',
+    '2:a',
+  ]);
+
+  expect(selectedPiecesToCellIndices(['0:a', '0:b', '3:full', 5])).toEqual([0, 3, 5]);
 });

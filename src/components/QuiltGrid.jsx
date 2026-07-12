@@ -1,13 +1,16 @@
 import { memo, useMemo } from 'react';
 import GridCell from './GridCell';
-import { getMergeBorders } from '../mergeUtils';
+import { getMergeBorders, pieceKey } from '../mergeUtils';
 
 function QuiltGrid({
   rows,
   columns,
   cellColors,
+  cellColorsB,
+  cellDiagonals,
   merges,
   cellMergeIds,
+  pieceMergeIds,
   selectedBlocks,
   suppressRepeatHighlight,
   eraserMode,
@@ -16,6 +19,7 @@ function QuiltGrid({
   onCellPointerDown,
   onCellPointerEnter,
   onCellPointerUp,
+  onCellDiagonalToggle,
 }) {
   const gridStyle = useMemo(
     () => ({
@@ -42,19 +46,38 @@ function QuiltGrid({
 
   return (
     <div className={gridClassName} style={gridStyle}>
-      {cellColors.map((color, index) => (
-        <GridCell
-          key={index}
-          index={index}
-          color={color}
-          mergeBorders={getMergeBorders(index, columns, merges, cellMergeIds)}
-          isSelected={!suppressRepeatHighlight && selectedSet.has(index)}
-          sideLabel={sideLabel}
-          onCellPointerDown={onCellPointerDown}
-          onCellPointerEnter={onCellPointerEnter}
-          onCellPointerUp={onCellPointerUp}
-        />
-      ))}
+      {cellColors.map((color, index) => {
+        const diagonal = cellDiagonals?.[index] ?? null;
+        const selectedFull =
+          !suppressRepeatHighlight && !diagonal && selectedSet.has(pieceKey(index, null));
+        const selectedA =
+          !suppressRepeatHighlight && Boolean(diagonal) && selectedSet.has(pieceKey(index, 'a'));
+        const selectedB =
+          !suppressRepeatHighlight && Boolean(diagonal) && selectedSet.has(pieceKey(index, 'b'));
+
+        return (
+          <GridCell
+            key={index}
+            index={index}
+            color={color}
+            colorB={cellColorsB?.[index] ?? null}
+            diagonal={diagonal}
+            mergeBorders={getMergeBorders(index, columns, merges, cellMergeIds, {
+              rows,
+              pieceMergeIds,
+              cellDiagonals,
+            })}
+            selectedFull={selectedFull}
+            selectedA={selectedA}
+            selectedB={selectedB}
+            sideLabel={sideLabel}
+            onCellPointerDown={onCellPointerDown}
+            onCellPointerEnter={onCellPointerEnter}
+            onCellPointerUp={onCellPointerUp}
+            onCellDiagonalToggle={onCellDiagonalToggle}
+          />
+        );
+      })}
     </div>
   );
 }

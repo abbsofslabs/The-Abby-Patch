@@ -14,15 +14,23 @@ import { useAuth } from '../context/AuthContext';
 import { CREAM, FABRIC_PALETTE, PAYWALL_ENABLED, QUILT_SIZE_PRESETS, SIDES } from '../constants';
 import { generateQuiltPdf } from '../generateQuiltPdf';
 import {
-  addBlockSelections,
+  addPieceSelections,
   applyPatternSnapshot,
   extractPatternSnapshot,
-  getColoredBlockIndices,
-  removeBlockSelections,
+  getColoredPieceKeys,
+  normalizeSelectedPieces,
+  removePieceSelections,
+  selectedPiecesToCellIndices,
 } from '../gridUtils';
 import {
-  getMergedCellIndices,
-  mergeSelectedBlocks,
+  cellsBetween,
+  createEmptyPieceMergeIds,
+  dissolveMergesTouchingPieces,
+  getMergedPieces,
+  getPieceColor,
+  mergePieces,
+  parsePieceKey,
+  pieceKey,
   unmergeSelectedBlocks,
 } from '../mergeUtils';
 import {
@@ -32,6 +40,7 @@ import {
   formatDimension,
 } from '../yardageCalculator';
 import { buildFabricPricingReport } from '../utils/fabricPricing';
+import { nextDiagonal } from '../triangleUtils';
 import {
   getUserEmail,
   hasSubscription,
@@ -51,10 +60,14 @@ function createSideState(rows, columns) {
   const cellCount = r * c;
   return {
     cellColors: Array(cellCount).fill(null),
+    cellColorsB: Array(cellCount).fill(null),
     cellFabricIds: Array(cellCount).fill(null),
+    cellFabricIdsB: Array(cellCount).fill(null),
+    cellDiagonals: Array(cellCount).fill(null),
     selectedBlocks: [],
     merges: {},
     cellMergeIds: Array(cellCount).fill(null),
+    pieceMergeIds: createEmptyPieceMergeIds(cellCount),
   };
 }
 
@@ -64,31 +77,42 @@ function normalizeSideState(side, rows, columns) {
     side?.cellColors?.length === cellCount
       ? side.cellColors
       : Array(cellCount).fill(null);
+  const cellColorsB =
+    side?.cellColorsB?.length === cellCount
+      ? side.cellColorsB
+      : Array(cellCount).fill(null);
   const cellFabricIds =
     side?.cellFabricIds?.length === cellCount
       ? side.cellFabricIds
+      : Array(cellCount).fill(null);
+  const cellFabricIdsB =
+    side?.cellFabricIdsB?.length === cellCount
+      ? side.cellFabricIdsB
+      : Array(cellCount).fill(null);
+  const cellDiagonals =
+    side?.cellDiagonals?.length === cellCount
+      ? side.cellDiagonals
       : Array(cellCount).fill(null);
   const cellMergeIds =
     side?.cellMergeIds?.length === cellCount
       ? side.cellMergeIds
       : Array(cellCount).fill(null);
+  const pieceMergeIds =
+    side?.pieceMergeIds?.length === cellCount
+      ? side.pieceMergeIds
+      : createEmptyPieceMergeIds(cellCount);
 
   return {
     cellColors,
+    cellColorsB,
     cellFabricIds,
-    selectedBlocks: side?.selectedBlocks ?? [],
+    cellFabricIdsB,
+    cellDiagonals,
+    selectedBlocks: normalizeSelectedPieces(side?.selectedBlocks, cellDiagonals),
     merges: side?.merges ?? {},
     cellMergeIds,
+    pieceMergeIds,
   };
-}
-
-function isMergeCandidate(indices, cellColors) {
-  if (indices.length < 2) {
-    return false;
-  }
-
-  const colors = indices.map((index) => cellColors[index]?.toLowerCase()).filter(Boolean);
-  return colors.length === indices.length && new Set(colors).size === 1;
 }
 
 function Designer() {
@@ -124,11 +148,24 @@ function Designer() {
   const backGridRef = useRef(null);
   const executePdfDownloadRef = useRef(null);
   const isPaintingRef = useRef(false);
-  const cellDragIndicesRef = useRef(new Set());
-  const isGridDragRef = useRef(false);
+  const paintHalfRef = useRef(null);
+  // One stroke = pointerdown → pointerup. 'paint' | 'merge' | 'select' | 'erase'
+  const strokeModeRef = useRef(null);
+  const strokeColorRef = useRef(null);
+  const strokeVisitedRef = useRef(new Set());
+  const mergeStrokeKeysRef = useRef(new Set());
+  const lastStrokeCellRef = useRef(null);
 
   const activeSideData = sides[activeSide];
-  const { cellColors, selectedBlocks, merges, cellMergeIds } = activeSideData;
+  const {
+    cellColors,
+    cellColorsB,
+    cellDiagonals,
+    selectedBlocks,
+    merges,
+    cellMergeIds,
+    pieceMergeIds,
+  } = activeSideData;
   const activeSideLabel = SIDES.find((s) => s.id === activeSide)?.label ?? 'Front';
   const copiedPattern = patternClipboard[activeSide];
   const activeFabricId = useMemo(
@@ -226,7 +263,7 @@ function Designer() {
       side.merges,
       side.cellMergeIds,
       grid.columns,
-      side.selectedBlocks
+      selectedPiecesToCellIndices(side.selectedBlocks)
     );
 
     if (snapshot.error === 'no_selection') {
@@ -260,6 +297,8 @@ function Designer() {
           currentSide.cellMergeIds,
           grid.columns,
           currentSide.selectedBlocks
+            ? selectedPiecesToCellIndices(currentSide.selectedBlocks)
+            : []
         );
 
       if (snapshot.error === 'no_selection') {
@@ -279,13 +318,22 @@ function Designer() {
         snapshot
       );
 
+      const cellCount = grid.rows * grid.columns;
+
       return {
         ...prev,
         [activeSide]: {
           ...currentSide,
           cellColors: result.cellColors,
+          // The snapshot only carries base colors + full-cell merges, so the
+          // pasted side drops diagonal cuts to stay consistent.
+          cellColorsB: Array(cellCount).fill(null),
+          cellFabricIdsB: Array(cellCount).fill(null),
+          cellDiagonals: Array(cellCount).fill(null),
           merges: result.merges,
           cellMergeIds: result.cellMergeIds,
+          pieceMergeIds:
+            result.pieceMergeIds ?? createEmptyPieceMergeIds(cellCount),
           selectedBlocks: [],
         },
       };
@@ -295,50 +343,81 @@ function Designer() {
   }, [activeSide, grid, patternClipboard]);
 
   const applyCellColor = useCallback(
-    (index, nextColor, nextFabricId = null) => {
+    (index, nextColor, nextFabricId = null, half = null) => {
       setSides((prev) => {
         const side = prev[activeSide];
-        const targetIndices = getMergedCellIndices(
+        const pieces = getMergedPieces(
           index,
+          half,
           side.merges,
-          side.cellMergeIds
+          side.pieceMergeIds,
+          side.cellDiagonals
         );
 
-        if (
-          targetIndices.every(
-            (cellIndex) =>
-              side.cellColors[cellIndex] === nextColor &&
-              (side.cellFabricIds[cellIndex] ?? null) === nextFabricId
-          )
-        ) {
-          return prev;
-        }
-
-        const next = [...side.cellColors];
+        let changed = false;
+        const nextColors = [...side.cellColors];
+        const nextColorsB = [...side.cellColorsB];
         const nextFabricIds = [...side.cellFabricIds];
-        targetIndices.forEach((cellIndex) => {
-          next[cellIndex] = nextColor;
-          nextFabricIds[cellIndex] = nextColor ? nextFabricId : null;
+        const nextFabricIdsB = [...side.cellFabricIdsB];
+        let nextMerges = side.merges;
+
+        pieces.forEach(({ index: cellIndex, half: pieceHalf }) => {
+          const hasDiagonal = Boolean(side.cellDiagonals[cellIndex]);
+          const targetHalf = hasDiagonal ? pieceHalf || half || 'a' : null;
+
+          if (targetHalf === 'b') {
+            if (
+              nextColorsB[cellIndex] !== nextColor ||
+              (nextFabricIdsB[cellIndex] ?? null) !== nextFabricId
+            ) {
+              nextColorsB[cellIndex] = nextColor;
+              nextFabricIdsB[cellIndex] = nextColor ? nextFabricId : null;
+              changed = true;
+            }
+            return;
+          }
+
+          if (
+            nextColors[cellIndex] !== nextColor ||
+            (nextFabricIds[cellIndex] ?? null) !== nextFabricId
+          ) {
+            nextColors[cellIndex] = nextColor;
+            nextFabricIds[cellIndex] = nextColor ? nextFabricId : null;
+            changed = true;
+          }
+
+          if (!hasDiagonal) {
+            if (nextColorsB[cellIndex] != null || nextFabricIdsB[cellIndex] != null) {
+              nextColorsB[cellIndex] = null;
+              nextFabricIdsB[cellIndex] = null;
+              changed = true;
+            }
+          }
+
+          const mergeId = side.pieceMergeIds[cellIndex]?.a ?? side.cellMergeIds[cellIndex];
+          if (mergeId != null && side.merges[mergeId] && targetHalf !== 'b') {
+            nextMerges = {
+              ...nextMerges,
+              [mergeId]: {
+                ...nextMerges[mergeId],
+                color: nextColor,
+              },
+            };
+          }
         });
 
-        const mergeId = side.cellMergeIds[index];
-        let nextMerges = side.merges;
-        if (mergeId != null && side.merges[mergeId]) {
-          nextMerges = {
-            ...side.merges,
-            [mergeId]: {
-              ...side.merges[mergeId],
-              color: nextColor,
-            },
-          };
+        if (!changed) {
+          return prev;
         }
 
         return {
           ...prev,
           [activeSide]: {
             ...side,
-            cellColors: next,
+            cellColors: nextColors,
+            cellColorsB: nextColorsB,
             cellFabricIds: nextFabricIds,
+            cellFabricIdsB: nextFabricIdsB,
             merges: nextMerges,
           },
         };
@@ -348,74 +427,215 @@ function Designer() {
   );
 
   const applyCellStroke = useCallback(
-    (index, { allowToggle = false } = {}) => {
-      if (selectionMode) {
-        setSides((prev) => {
-          const side = prev[activeSide];
-          const targetIndices = getMergedCellIndices(
-            index,
-            side.merges,
-            side.cellMergeIds
-          );
-          const allSelected = targetIndices.every((cellIndex) =>
-            side.selectedBlocks.includes(cellIndex)
-          );
-
-          if (allSelected && !allowToggle) {
-            return prev;
-          }
-
-          return {
-            ...prev,
-            [activeSide]: {
-              ...side,
-              selectedBlocks: allSelected
-                ? removeBlockSelections(side.selectedBlocks, targetIndices)
-                : addBlockSelections(side.selectedBlocks, targetIndices),
-            },
-          };
-        });
+    (index, { allowToggle = false, half = null } = {}) => {
+      if (!selectionMode) {
         return;
       }
 
-      if (eraserMode) {
-        applyCellColor(index, null, null);
-      }
+      setSides((prev) => {
+        const side = prev[activeSide];
+        const resolvedHalf = side.cellDiagonals[index] ? half || 'a' : null;
+        const targetPieces = getMergedPieces(
+          index,
+          resolvedHalf,
+          side.merges,
+          side.pieceMergeIds,
+          side.cellDiagonals
+        );
+        const targetKeys = targetPieces.map((piece) =>
+          pieceKey(piece.index, piece.half)
+        );
+        const allSelected = targetKeys.every((key) =>
+          side.selectedBlocks.includes(key)
+        );
+
+        if (allSelected && !allowToggle) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [activeSide]: {
+            ...side,
+            selectedBlocks: allSelected
+              ? removePieceSelections(side.selectedBlocks, targetKeys)
+              : addPieceSelections(side.selectedBlocks, targetKeys),
+          },
+        };
+      });
     },
-    [activeSide, applyCellColor, eraserMode, selectionMode]
+    [activeSide, selectionMode]
   );
 
-  const finalizeCellDrag = useCallback(() => {
-    if (!grid || !isGridDragRef.current) {
-      return;
-    }
+  const erasePiece = useCallback(
+    (index, half = null) => {
+      setSides((prev) => {
+        const side = prev[activeSide];
+        const resolvedHalf = side.cellDiagonals[index] ? half || 'a' : null;
+        const pieces = getMergedPieces(
+          index,
+          resolvedHalf,
+          side.merges,
+          side.pieceMergeIds,
+          side.cellDiagonals
+        );
 
-    const indices = [...cellDragIndicesRef.current];
-    cellDragIndicesRef.current.clear();
-    isGridDragRef.current = false;
+        // Erasing dissolves any merge it touches so no invisible merges linger.
+        const dissolved = dissolveMergesTouchingPieces(
+          side.merges,
+          side.pieceMergeIds,
+          pieces
+        );
 
-    if (indices.length < 2) {
+        const nextColors = [...side.cellColors];
+        const nextColorsB = [...side.cellColorsB];
+        const nextFabricIds = [...side.cellFabricIds];
+        const nextFabricIdsB = [...side.cellFabricIdsB];
+        let changed = dissolved.merges !== side.merges;
+
+        pieces.forEach(({ index: cellIndex, half: pieceHalf }) => {
+          const hasDiagonal = Boolean(side.cellDiagonals[cellIndex]);
+          const targetHalf = hasDiagonal ? pieceHalf || 'a' : null;
+
+          if (targetHalf === 'b') {
+            if (nextColorsB[cellIndex] != null || nextFabricIdsB[cellIndex] != null) {
+              nextColorsB[cellIndex] = null;
+              nextFabricIdsB[cellIndex] = null;
+              changed = true;
+            }
+            return;
+          }
+
+          if (nextColors[cellIndex] != null || nextFabricIds[cellIndex] != null) {
+            nextColors[cellIndex] = null;
+            nextFabricIds[cellIndex] = null;
+            changed = true;
+          }
+
+          if (!hasDiagonal && (nextColorsB[cellIndex] != null || nextFabricIdsB[cellIndex] != null)) {
+            nextColorsB[cellIndex] = null;
+            nextFabricIdsB[cellIndex] = null;
+            changed = true;
+          }
+        });
+
+        if (!changed) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [activeSide]: {
+            ...side,
+            cellColors: nextColors,
+            cellColorsB: nextColorsB,
+            cellFabricIds: nextFabricIds,
+            cellFabricIdsB: nextFabricIdsB,
+            merges: dissolved.merges,
+            cellMergeIds: dissolved.cellMergeIds,
+            pieceMergeIds: dissolved.pieceMergeIds,
+          },
+        };
+      });
+    },
+    [activeSide]
+  );
+
+  /** Add a piece (and pieces skipped by fast drags) to the current merge stroke. */
+  const collectMergeStrokePiece = useCallback(
+    (index, half) => {
+      const side = sides[activeSide];
+      const strokeColor = strokeColorRef.current;
+      if (!strokeColor) {
+        return;
+      }
+
+      const path =
+        lastStrokeCellRef.current != null && lastStrokeCellRef.current !== index
+          ? cellsBetween(lastStrokeCellRef.current, index, grid.columns)
+          : [index];
+
+      path.forEach((cellIndex) => {
+        const diagonal = side.cellDiagonals[cellIndex];
+        const halves = diagonal
+          ? cellIndex === index
+            ? [half || 'a']
+            : ['a', 'b']
+          : [null];
+
+        halves.forEach((candidateHalf) => {
+          const visitKey = pieceKey(cellIndex, candidateHalf);
+          if (strokeVisitedRef.current.has(visitKey)) {
+            return;
+          }
+          strokeVisitedRef.current.add(visitKey);
+
+          const color = getPieceColor(
+            side.cellColors,
+            side.cellColorsB,
+            side.cellDiagonals,
+            cellIndex,
+            candidateHalf
+          );
+          if (!color || color.toLowerCase() !== strokeColor) {
+            return;
+          }
+
+          getMergedPieces(
+            cellIndex,
+            candidateHalf,
+            side.merges,
+            side.pieceMergeIds,
+            side.cellDiagonals
+          ).forEach((piece) => {
+            mergeStrokeKeysRef.current.add(pieceKey(piece.index, piece.half));
+          });
+        });
+      });
+
+      lastStrokeCellRef.current = index;
+
+      // Live highlight of what will merge on release.
+      const feedback = [...mergeStrokeKeysRef.current];
+      setSides((prev) => ({
+        ...prev,
+        [activeSide]: { ...prev[activeSide], selectedBlocks: feedback },
+      }));
+    },
+    [activeSide, grid, sides]
+  );
+
+  const finalizeMergeStroke = useCallback(() => {
+    const keys = [...mergeStrokeKeysRef.current];
+    mergeStrokeKeysRef.current = new Set();
+    strokeColorRef.current = null;
+
+    if (!grid) {
       return;
     }
 
     setSides((prev) => {
       const side = prev[activeSide];
 
-      if (!isMergeCandidate(indices, side.cellColors)) {
-        return prev;
+      if (keys.length < 2) {
+        return { ...prev, [activeSide]: { ...side, selectedBlocks: [] } };
       }
 
-      const result = mergeSelectedBlocks(
+      const pieces = keys.map((key) => parsePieceKey(key));
+      const result = mergePieces(
+        pieces,
         side.cellColors,
-        indices,
+        side.cellColorsB,
+        side.cellDiagonals,
         grid.columns,
+        grid.rows,
         side.merges,
-        side.cellMergeIds
+        side.pieceMergeIds
       );
 
       if (!result.ok) {
         window.alert(result.message);
-        return prev;
+        return { ...prev, [activeSide]: { ...side, selectedBlocks: [] } };
       }
 
       return {
@@ -424,114 +644,193 @@ function Designer() {
           ...side,
           merges: result.merges,
           cellMergeIds: result.cellMergeIds,
+          pieceMergeIds: result.pieceMergeIds,
+          selectedBlocks: [],
         },
       };
     });
   }, [activeSide, grid]);
 
   const handleCellPointerDown = useCallback(
-    (index) => {
+    (index, half = null) => {
       isPaintingRef.current = true;
+      paintHalfRef.current = half ?? null;
+      strokeVisitedRef.current = new Set([pieceKey(index, half)]);
+      lastStrokeCellRef.current = index;
 
       if (selectionMode) {
-        applyCellStroke(index, { allowToggle: true });
+        strokeModeRef.current = 'select';
+        applyCellStroke(index, { allowToggle: true, half });
         return;
       }
 
       if (eraserMode) {
-        applyCellStroke(index);
+        strokeModeRef.current = 'erase';
+        erasePiece(index, half);
         return;
       }
 
-      isGridDragRef.current = true;
-      cellDragIndicesRef.current = new Set([index]);
-      applyCellColor(index, selectedColor, activeFabricId);
+      const side = sides[activeSide];
+      const resolvedHalf = side.cellDiagonals[index] ? half || 'a' : null;
+      const currentColor = getPieceColor(
+        side.cellColors,
+        side.cellColorsB,
+        side.cellDiagonals,
+        index,
+        resolvedHalf
+      );
+
+      if (
+        currentColor &&
+        selectedColor &&
+        currentColor.toLowerCase() === selectedColor.toLowerCase()
+      ) {
+        // Dragging across pieces that already match the brush color merges them.
+        strokeModeRef.current = 'merge';
+        strokeColorRef.current = currentColor.toLowerCase();
+        mergeStrokeKeysRef.current = new Set();
+        getMergedPieces(
+          index,
+          resolvedHalf,
+          side.merges,
+          side.pieceMergeIds,
+          side.cellDiagonals
+        ).forEach((piece) => {
+          mergeStrokeKeysRef.current.add(pieceKey(piece.index, piece.half));
+        });
+        setSides((prev) => ({
+          ...prev,
+          [activeSide]: {
+            ...prev[activeSide],
+            selectedBlocks: [...mergeStrokeKeysRef.current],
+          },
+        }));
+        return;
+      }
+
+      strokeModeRef.current = 'paint';
+      applyCellColor(index, selectedColor, activeFabricId, half);
     },
-    [activeFabricId, applyCellColor, applyCellStroke, eraserMode, selectedColor, selectionMode]
+    [
+      activeFabricId,
+      activeSide,
+      applyCellColor,
+      applyCellStroke,
+      erasePiece,
+      eraserMode,
+      selectedColor,
+      selectionMode,
+      sides,
+    ]
   );
 
-  const handleCellPointerEnter = useCallback(
+  const handleCellDiagonalToggle = useCallback(
     (index) => {
-      if (!isPaintingRef.current) {
-        return;
-      }
-
-      if (selectionMode || eraserMode) {
-        applyCellStroke(index);
-        return;
-      }
-
-      if (!isGridDragRef.current) {
-        return;
-      }
-
-      cellDragIndicesRef.current.add(index);
-      const indices = [...cellDragIndicesRef.current];
-
       setSides((prev) => {
         const side = prev[activeSide];
+        const nextDiagonalValue = nextDiagonal(side.cellDiagonals[index] ?? null);
+        const dissolved = dissolveMergesTouchingPieces(side.merges, side.pieceMergeIds, [
+          { index, half: null },
+        ]);
+        const nextDiagonals = [...side.cellDiagonals];
+        const nextColorsB = [...side.cellColorsB];
+        const nextFabricIdsB = [...side.cellFabricIdsB];
 
-        if (isMergeCandidate(indices, side.cellColors)) {
-          return prev;
+        nextDiagonals[index] = nextDiagonalValue;
+        if (nextDiagonalValue) {
+          nextColorsB[index] = side.cellColors[index];
+          nextFabricIdsB[index] = side.cellFabricIds[index];
+        } else {
+          nextColorsB[index] = null;
+          nextFabricIdsB[index] = null;
         }
-
-        const targetIndices = getMergedCellIndices(
-          index,
-          side.merges,
-          side.cellMergeIds
-        );
-
-        if (
-          targetIndices.every(
-            (cellIndex) =>
-              side.cellColors[cellIndex] === selectedColor &&
-              (side.cellFabricIds[cellIndex] ?? null) === activeFabricId
-          )
-        ) {
-          return prev;
-        }
-
-        const next = [...side.cellColors];
-        const nextFabricIds = [...side.cellFabricIds];
-        targetIndices.forEach((cellIndex) => {
-          next[cellIndex] = selectedColor;
-          nextFabricIds[cellIndex] = selectedColor ? activeFabricId : null;
-        });
 
         return {
           ...prev,
           [activeSide]: {
             ...side,
-            cellColors: next,
-            cellFabricIds: nextFabricIds,
+            merges: dissolved.merges,
+            cellMergeIds: dissolved.cellMergeIds,
+            pieceMergeIds: dissolved.pieceMergeIds,
+            cellDiagonals: nextDiagonals,
+            cellColorsB: nextColorsB,
+            cellFabricIdsB: nextFabricIdsB,
+            // Selections referencing this cell's halves are stale after a cut change.
+            selectedBlocks: side.selectedBlocks.filter(
+              (key) => parsePieceKey(key).index !== index
+            ),
           },
         };
       });
     },
-    [activeFabricId, activeSide, applyCellStroke, eraserMode, selectedColor, selectionMode]
+    [activeSide]
   );
 
-  const handleCellPointerUp = useCallback(
-    (index) => {
-      if (selectionMode || eraserMode) {
-        isPaintingRef.current = false;
+  const handleCellPointerEnter = useCallback(
+    (index, half = null) => {
+      if (!isPaintingRef.current) {
         return;
       }
 
-      if (isGridDragRef.current) {
-        finalizeCellDrag();
+      paintHalfRef.current = half ?? null;
+      const strokeMode = strokeModeRef.current;
+
+      if (strokeMode === 'merge') {
+        collectMergeStrokePiece(index, half);
+        return;
       }
-      isPaintingRef.current = false;
+
+      const visitKey = pieceKey(index, half);
+      if (strokeVisitedRef.current.has(visitKey)) {
+        return;
+      }
+      strokeVisitedRef.current.add(visitKey);
+      lastStrokeCellRef.current = index;
+
+      if (strokeMode === 'select') {
+        applyCellStroke(index, { half });
+        return;
+      }
+
+      if (strokeMode === 'erase') {
+        erasePiece(index, half);
+        return;
+      }
+
+      if (strokeMode === 'paint') {
+        applyCellColor(index, selectedColor, activeFabricId, half);
+      }
     },
-    [eraserMode, finalizeCellDrag, selectionMode]
+    [
+      activeFabricId,
+      applyCellColor,
+      applyCellStroke,
+      collectMergeStrokePiece,
+      erasePiece,
+      selectedColor,
+    ]
   );
+
+  const endStroke = useCallback(() => {
+    if (strokeModeRef.current === 'merge') {
+      finalizeMergeStroke();
+    }
+    strokeModeRef.current = null;
+    strokeVisitedRef.current = new Set();
+    lastStrokeCellRef.current = null;
+    isPaintingRef.current = false;
+    paintHalfRef.current = null;
+  }, [finalizeMergeStroke]);
+
+  const handleCellPointerUp = useCallback(() => {
+    endStroke();
+  }, [endStroke]);
 
   useEffect(() => {
     const stopPainting = () => {
-      if (isPaintingRef.current && isGridDragRef.current) {
-        finalizeCellDrag();
+      if (isPaintingRef.current) {
+        endStroke();
       }
-      isPaintingRef.current = false;
     };
     window.addEventListener('pointerup', stopPainting);
     window.addEventListener('pointercancel', stopPainting);
@@ -539,7 +838,7 @@ function Designer() {
       window.removeEventListener('pointerup', stopPainting);
       window.removeEventListener('pointercancel', stopPainting);
     };
-  }, [finalizeCellDrag]);
+  }, [endStroke]);
 
   const handleClearAll = useCallback(() => {
     if (!grid) return;
@@ -549,9 +848,13 @@ function Designer() {
       [activeSide]: {
         ...prev[activeSide],
         cellColors: Array(grid.rows * grid.columns).fill(null),
+        cellColorsB: Array(grid.rows * grid.columns).fill(null),
         cellFabricIds: Array(grid.rows * grid.columns).fill(null),
+        cellFabricIdsB: Array(grid.rows * grid.columns).fill(null),
+        cellDiagonals: Array(grid.rows * grid.columns).fill(null),
         merges: {},
         cellMergeIds: Array(grid.rows * grid.columns).fill(null),
+        pieceMergeIds: createEmptyPieceMergeIds(grid.rows * grid.columns),
       },
     }));
     setEraserMode(false);
@@ -583,31 +886,101 @@ function Designer() {
   }, [activeSide]);
 
   const coloredBlockCount = useMemo(
-    () => getColoredBlockIndices(cellColors).length,
-    [cellColors]
+    () =>
+      getColoredPieceKeys(cellColors, cellColorsB, cellDiagonals).length,
+    [cellColors, cellColorsB, cellDiagonals]
   );
 
   const handleSelectAllColored = useCallback(() => {
-    const indices = getColoredBlockIndices(cellColors);
-    if (!indices.length) {
+    const keys = getColoredPieceKeys(cellColors, cellColorsB, cellDiagonals);
+    if (!keys.length) {
       return;
     }
 
     setSides((prev) => ({
       ...prev,
-      [activeSide]: { ...prev[activeSide], selectedBlocks: indices },
+      [activeSide]: { ...prev[activeSide], selectedBlocks: keys },
     }));
     setSelectionMode(true);
     setEraserMode(false);
-  }, [activeSide, cellColors]);
+  }, [activeSide, cellColors, cellColorsB, cellDiagonals]);
 
-  const handleUnmergeSquares = useCallback(() => {
+  const handleMergeSquares = useCallback(() => {
+    if (!grid) {
+      return;
+    }
+
     setSides((prev) => {
       const side = prev[activeSide];
-      const result = unmergeSelectedBlocks(
-        side.selectedBlocks,
+      if (!side.selectedBlocks.length) {
+        window.alert('Select at least one colored shape to merge.');
+        return prev;
+      }
+
+      const pieces = [];
+      const seen = new Set();
+
+      side.selectedBlocks.forEach((key) => {
+        const piece =
+          typeof key === 'number'
+            ? { index: key, half: side.cellDiagonals[key] ? 'a' : null }
+            : parsePieceKey(key);
+
+        getMergedPieces(
+          piece.index,
+          piece.half,
+          side.merges,
+          side.pieceMergeIds,
+          side.cellDiagonals
+        ).forEach((mergedPiece) => {
+          const pieceId = pieceKey(mergedPiece.index, mergedPiece.half);
+          if (!seen.has(pieceId)) {
+            seen.add(pieceId);
+            pieces.push(mergedPiece);
+          }
+        });
+      });
+
+      if (!pieces.length) {
+        window.alert('Select colored shapes to merge.');
+        return prev;
+      }
+
+      const primaryColor = getPieceColor(
+        side.cellColors,
+        side.cellColorsB,
+        side.cellDiagonals,
+        pieces[0].index,
+        pieces[0].half
+      )?.toLowerCase();
+
+      const sameColorPieces = pieces.filter(
+        (piece) =>
+          getPieceColor(
+            side.cellColors,
+            side.cellColorsB,
+            side.cellDiagonals,
+            piece.index,
+            piece.half
+          )?.toLowerCase() === primaryColor
+      );
+
+      if (sameColorPieces.length < 2) {
+        window.alert(
+          'Select at least two touching same-color shapes (triangle halves count).'
+        );
+        return prev;
+      }
+
+      const result = mergePieces(
+        sameColorPieces,
+        side.cellColors,
+        side.cellColorsB,
+        side.cellDiagonals,
+        grid.columns,
+        grid.rows,
         side.merges,
-        side.cellMergeIds
+        side.pieceMergeIds
       );
 
       if (!result.ok) {
@@ -621,6 +994,35 @@ function Designer() {
           ...side,
           merges: result.merges,
           cellMergeIds: result.cellMergeIds,
+          pieceMergeIds: result.pieceMergeIds,
+          selectedBlocks: [],
+        },
+      };
+    });
+  }, [activeSide, grid]);
+
+  const handleUnmergeSquares = useCallback(() => {
+    setSides((prev) => {
+      const side = prev[activeSide];
+      const result = unmergeSelectedBlocks(
+        selectedPiecesToCellIndices(side.selectedBlocks),
+        side.merges,
+        side.cellMergeIds,
+        side.pieceMergeIds
+      );
+
+      if (!result.ok) {
+        window.alert(result.message);
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [activeSide]: {
+          ...side,
+          merges: result.merges,
+          cellMergeIds: result.cellMergeIds,
+          pieceMergeIds: result.pieceMergeIds,
           selectedBlocks: [],
         },
       };
@@ -659,23 +1061,29 @@ function Designer() {
 
   const colorLegend = useMemo(() => {
     const counts = {};
-    cellColors.forEach((color) => {
+    const tally = (color) => {
       if (color && color.toLowerCase() !== CREAM) {
         const key = color.toLowerCase();
         counts[key] = (counts[key] || 0) + 1;
       }
-    });
+    };
+    cellColors.forEach(tally);
+    cellColorsB.forEach(tally);
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  }, [cellColors]);
+  }, [cellColors, cellColorsB]);
 
   const pricingReport = useMemo(() => {
     if (!grid) return null;
     return buildFabricPricingReport({
       frontCellColors: sides.front.cellColors,
       frontCellFabricIds: sides.front.cellFabricIds,
+      frontCellColorsB: sides.front.cellColorsB,
+      frontCellDiagonals: sides.front.cellDiagonals,
       frontMerges: sides.front.merges,
       backCellColors: sides.back.cellColors,
       backCellFabricIds: sides.back.cellFabricIds,
+      backCellColorsB: sides.back.cellColorsB,
+      backCellDiagonals: sides.back.cellDiagonals,
       backMerges: sides.back.merges,
       quiltWidth: grid.finishedWidth,
       quiltHeight: grid.finishedHeight,
@@ -686,10 +1094,14 @@ function Designer() {
     });
   }, [
     sides.front.cellColors,
+    sides.front.cellColorsB,
     sides.front.cellFabricIds,
+    sides.front.cellDiagonals,
     sides.front.merges,
     sides.back.cellColors,
+    sides.back.cellColorsB,
     sides.back.cellFabricIds,
+    sides.back.cellDiagonals,
     sides.back.merges,
     grid,
     seamAllowance,
@@ -712,7 +1124,11 @@ function Designer() {
       grid.finishedHeight,
       grid.columns,
       grid.rows,
-      Number(seamAllowance) || DEFAULT_SEAM_ALLOWANCE
+      Number(seamAllowance) || DEFAULT_SEAM_ALLOWANCE,
+      {
+        cellColorsB: sides.front.cellColorsB,
+        cellDiagonals: sides.front.cellDiagonals,
+      }
     );
     const backReport = buildYardageReport(
       sides.back.cellColors,
@@ -721,7 +1137,11 @@ function Designer() {
       grid.finishedHeight,
       grid.columns,
       grid.rows,
-      Number(seamAllowance) || DEFAULT_SEAM_ALLOWANCE
+      Number(seamAllowance) || DEFAULT_SEAM_ALLOWANCE,
+      {
+        cellColorsB: sides.back.cellColorsB,
+        cellDiagonals: sides.back.cellDiagonals,
+      }
     );
 
     if (document.activeElement instanceof HTMLElement) {
@@ -762,8 +1182,12 @@ function Designer() {
   }, [
     grid,
     sides.front.cellColors,
+    sides.front.cellColorsB,
+    sides.front.cellDiagonals,
     sides.front.merges,
     sides.back.cellColors,
+    sides.back.cellColorsB,
+    sides.back.cellDiagonals,
     sides.back.merges,
     yardageReport,
     seamAllowance,
@@ -1111,7 +1535,7 @@ function Designer() {
                   <p className="abby-patch__tool-hint">
                     {eraserMode
                       ? 'Eraser on — click or drag to remove color'
-                      : 'Left click or drag to paint. Drag across same-color blocks to merge.'}
+                      : 'Click or drag to paint (triangle halves paint separately). Drag across pieces already painted your color to merge them. Right click cuts a diagonal.'}
                   </p>
                 </div>
               </section>
@@ -1147,8 +1571,11 @@ function Designer() {
                   rows={grid.rows}
                   columns={grid.columns}
                   cellColors={cellColors}
+                  cellColorsB={cellColorsB}
+                  cellDiagonals={cellDiagonals}
                   merges={merges}
                   cellMergeIds={cellMergeIds}
+                  pieceMergeIds={pieceMergeIds}
                   selectedBlocks={selectedBlocks}
                   suppressRepeatHighlight={suppressRepeatHighlight}
                   eraserMode={eraserMode}
@@ -1157,6 +1584,7 @@ function Designer() {
                   onCellPointerDown={handleCellPointerDown}
                   onCellPointerEnter={handleCellPointerEnter}
                   onCellPointerUp={handleCellPointerUp}
+                  onCellDiagonalToggle={handleCellDiagonalToggle}
                 />
               </section>
 
@@ -1167,8 +1595,9 @@ function Designer() {
                 >
                   <h2 className="abby-patch__section-title">Copy &amp; paste — {activeSideLabel}</h2>
                   <p className="abby-patch__tool-box-desc">
-                    Select a pattern, copy it, then paste it across the whole quilt. Use Unmerge on
-                    a selected merged block to split it back into squares.
+                    Select same-color shapes — including individual triangle halves — then Merge.
+                    Use Unmerge to split a merged piece. You can also drag across same-color pieces
+                    to merge without selecting.
                   </p>
                   <div className="abby-patch__tool-box-controls">
                     <button
@@ -1177,7 +1606,7 @@ function Designer() {
                       onClick={handleToggleSelectionMode}
                       aria-pressed={selectionMode}
                     >
-                      Select blocks
+                      Select shapes
                     </button>
                     <button
                       type="button"
@@ -1194,6 +1623,14 @@ function Designer() {
                       disabled={!selectedBlocks.length}
                     >
                       Clear selection
+                    </button>
+                    <button
+                      type="button"
+                      className="abby-patch__tool-button"
+                      onClick={handleMergeSquares}
+                      disabled={!selectedBlocks.length}
+                    >
+                      Merge
                     </button>
                     <button
                       type="button"
@@ -1224,8 +1661,8 @@ function Designer() {
                     {copiedPattern
                       ? `${copiedPattern.width}×${copiedPattern.height} pattern ready to paste.`
                       : selectedBlocks.length > 0
-                        ? `${selectedBlocks.length} block${selectedBlocks.length === 1 ? '' : 's'} selected — copy or paste across the quilt.`
-                        : 'Turn on Select blocks, then click or drag to choose your pattern.'}
+                        ? `${selectedBlocks.length} shape${selectedBlocks.length === 1 ? '' : 's'} selected — merge, copy, or paste.`
+                        : 'Turn on Select shapes, then click a triangle half or block.'}
                   </p>
                 </section>
               </div>
@@ -1253,11 +1690,17 @@ function Designer() {
                   rows={grid.rows}
                   columns={grid.columns}
                   frontCellColors={sides.front.cellColors}
+                  frontCellColorsB={sides.front.cellColorsB}
+                  frontCellDiagonals={sides.front.cellDiagonals}
                   frontMerges={sides.front.merges}
                   frontCellMergeIds={sides.front.cellMergeIds}
+                  frontPieceMergeIds={sides.front.pieceMergeIds}
                   backCellColors={sides.back.cellColors}
+                  backCellColorsB={sides.back.cellColorsB}
+                  backCellDiagonals={sides.back.cellDiagonals}
                   backMerges={sides.back.merges}
                   backCellMergeIds={sides.back.cellMergeIds}
+                  backPieceMergeIds={sides.back.pieceMergeIds}
                   isExporting={suppressRepeatHighlight}
                 />
               )}
