@@ -92,8 +92,33 @@ export function AuthProvider({ children }) {
         emailRedirectTo: getAuthRedirectUrl(),
       },
     });
+
     if (error) {
+      const message = (error.message || '').toLowerCase();
+      if (
+        error.code === 'user_already_exists' ||
+        error.code === 'email_exists' ||
+        message.includes('already registered') ||
+        message.includes('already been registered') ||
+        message.includes('user already exists') ||
+        message.includes('email address is already')
+      ) {
+        const existing = new Error(
+          'You already have an account with this email. Please sign in.'
+        );
+        existing.code = 'account_exists';
+        throw existing;
+      }
       throw error;
+    }
+
+    // Supabase returns a user with empty identities when the email is already registered.
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      const existing = new Error(
+        'You already have an account with this email. Please sign in.'
+      );
+      existing.code = 'account_exists';
+      throw existing;
     }
 
     if (data.session && data.user) {
@@ -108,6 +133,10 @@ export function AuthProvider({ children }) {
       password,
     });
     if (signInError) {
+      const signInMessage = (signInError.message || '').toLowerCase();
+      if (signInMessage.includes('email not confirmed')) {
+        throw new Error('Check your email to confirm your account, then sign in.');
+      }
       throw signInError;
     }
 

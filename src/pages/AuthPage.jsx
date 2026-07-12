@@ -31,7 +31,12 @@ export default function AuthPage() {
       const { profile } = await signUp(email.trim(), password, role);
       navigate(profile?.role === 'store' || role === 'store' ? '/store' : '/design');
     } catch (submitError) {
-      setError(submitError.message || 'Unable to complete authentication.');
+      if (submitError.code === 'account_exists') {
+        setMode('signin');
+        setError('You already have an account with this email. Please sign in.');
+      } else {
+        setError(submitError.message || 'Unable to complete authentication.');
+      }
     } finally {
       setSubmitting(false);
     }
