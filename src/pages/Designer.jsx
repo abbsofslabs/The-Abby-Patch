@@ -890,6 +890,7 @@ function Designer() {
       <div className="abby-patch__main">
         <header className="abby-patch__header">
           <img src={logo} alt="The Abby Patch" className="abby-patch__logo" />
+          <p className="abby-patch__store-kicker">Customer account</p>
           <p className="abby-patch__tagline">Design your quilt, one patch at a time</p>
           <div className="abby-patch__header-actions">
             <span className="abby-patch__user-email">{user?.email}</span>

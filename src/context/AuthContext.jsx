@@ -75,19 +75,20 @@ export function AuthProvider({ children }) {
       throw error;
     }
 
-    const profile = await ensureProfile(data.user);
+    const nextProfile = await ensureProfile(data.user);
     setUser(data.user);
-    setProfile(profile);
-    return { user: data.user, profile };
+    setProfile(nextProfile);
+    return { user: data.user, profile: nextProfile };
   }, []);
 
   const signUp = useCallback(async (email, password, role) => {
+    const accountRole = role === 'store' ? 'store' : 'customer';
     const supabase = createClient();
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { role },
+        data: { role: accountRole },
         emailRedirectTo: getAuthRedirectUrl(),
       },
     });
@@ -96,7 +97,7 @@ export function AuthProvider({ children }) {
     }
 
     if (data.session && data.user) {
-      const nextProfile = await ensureProfile(data.user, role);
+      const nextProfile = await ensureProfile(data.user, accountRole);
       setUser(data.user);
       setProfile(nextProfile);
       return { user: data.user, profile: nextProfile };
@@ -110,7 +111,7 @@ export function AuthProvider({ children }) {
       throw signInError;
     }
 
-    const nextProfile = await ensureProfile(signInData.user, role);
+    const nextProfile = await ensureProfile(signInData.user, accountRole);
     setUser(signInData.user);
     setProfile(nextProfile);
     return { user: signInData.user, profile: nextProfile };

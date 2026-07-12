@@ -29,7 +29,7 @@ export default function AuthPage() {
       }
 
       const { profile } = await signUp(email.trim(), password, role);
-      navigate(profile?.role === 'store' ? '/store' : '/design');
+      navigate(profile?.role === 'store' || role === 'store' ? '/store' : '/design');
     } catch (submitError) {
       setError(submitError.message || 'Unable to complete authentication.');
     } finally {

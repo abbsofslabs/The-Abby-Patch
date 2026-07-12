@@ -2100,6 +2100,125 @@
 }
 
 /* Store portal */
+.abby-patch__store-page {
+  align-items: flex-start;
+}
+
+.abby-patch__store-shell {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.abby-patch__store-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.abby-patch__store-kicker {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sage-dark);
+}
+
+.abby-patch__store-heading {
+  margin: 0.25rem 0 0.5rem;
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  color: var(--brown);
+}
+
+.abby-patch__store-lede {
+  margin: 0;
+  max-width: 38rem;
+  color: var(--brown-mid);
+  line-height: 1.5;
+}
+
+.abby-patch__store-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.abby-patch__store-steps li {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--brown-mid);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.abby-patch__store-steps li.is-active {
+  border-color: var(--brown);
+  color: var(--brown);
+  background: #fff;
+}
+
+.abby-patch__store-steps li.is-done {
+  border-color: var(--sage);
+  color: var(--sage-dark);
+  background: rgba(141, 160, 128, 0.14);
+}
+
+.abby-patch__store-section {
+  width: 100%;
+}
+
+.abby-patch__store-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.abby-patch__store-form .abby-patch__input-group,
+.abby-patch__store-form .abby-patch__input-group input,
+.abby-patch__store-form .abby-patch__input-group--full input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.abby-patch__store-color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.abby-patch__fabric-upload-preview {
+  display: block;
+  margin-top: 0.75rem;
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.abby-patch__store-footnote {
+  text-align: center;
+  color: var(--brown-mid);
+  font-size: 0.95rem;
+}
+
 .abby-patch__store-portal {
   width: 100%;
   max-width: 720px;
@@ -2139,5 +2258,10 @@
 .abby-patch__store-fabric-card div {
   padding: 0.5rem 0.65rem;
   font-size: 0.9rem;
+}
+
+.abby-patch__store-fabric-card p {
+  margin: 0.25rem 0 0;
+  color: var(--brown-mid);
 }
 
