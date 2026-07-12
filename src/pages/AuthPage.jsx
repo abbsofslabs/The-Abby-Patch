@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/abby-patch-logo.png';
 
 export default function AuthPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState('signin');
+  const [mode, setMode] = useState(
+    searchParams.get('mode') === 'signup' ? 'signup' : 'signin'
+  );
   const [role, setRole] = useState('customer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

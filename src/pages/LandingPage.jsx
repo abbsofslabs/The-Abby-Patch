@@ -22,7 +22,7 @@ export default function LandingPage() {
             <Link to="/auth" className="abby-patch__button abby-patch__button--start">
               Sign in
             </Link>
-            <Link to="/auth" className="abby-patch__button abby-patch__button--secondary">
+            <Link to="/auth?mode=signup" className="abby-patch__button abby-patch__button--secondary">
               Create account
             </Link>
           </div>

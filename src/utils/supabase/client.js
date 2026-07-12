@@ -1,9 +1,8 @@
 import { createBrowserClient } from '@supabase/ssr';
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../../config/supabasePublic';
 
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseKey =
-  process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY ||
-  process.env.REACT_APP_SUPABASE_ANON_KEY;
+const supabaseUrl = SUPABASE_URL;
+const supabaseKey = SUPABASE_PUBLISHABLE_KEY;
 
 let browserClient;
 
