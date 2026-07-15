@@ -407,7 +407,16 @@ export function validatePieceMerge(
   rows
 ) {
   if (pieces.length < 2) {
-    return { ok: false, message: 'Select at least two shapes to merge.' };
+    return { ok: false, message: 'Select at least two blocks to merge.' };
+  }
+
+  // Quilters piece HSTs individually, so triangle halves never merge.
+  if (pieces.some((piece) => piece.half != null || cellDiagonals?.[piece.index])) {
+    return {
+      ok: false,
+      message:
+        'Triangles can\u2019t be merged \u2014 they\u2019re cut as individual half-square triangles. Only whole blocks can merge.',
+    };
   }
 
   const colors = pieces.map((piece) =>
@@ -415,16 +424,18 @@ export function validatePieceMerge(
   );
 
   if (colors.some((color) => !color)) {
-    return { ok: false, message: 'Empty shapes cannot be merged.' };
+    return { ok: false, message: 'Empty blocks cannot be merged.' };
   }
 
   const unique = new Set(colors.map((color) => color.toLowerCase()));
   if (unique.size !== 1) {
-    return { ok: false, message: 'All shapes must be the same color to merge.' };
+    return { ok: false, message: 'All blocks must be the same color to merge.' };
   }
 
-  if (!arePiecesConnected(pieces, columns, rows, cellDiagonals)) {
-    return { ok: false, message: 'Merged shapes must touch along an edge.' };
+  // A merge is cut as one piece of fabric, so it must be a solid rectangle.
+  const indices = [...new Set(pieces.map((piece) => piece.index))];
+  if (!getSelectionRectangle(indices, columns)) {
+    return { ok: false, message: 'Merged blocks must form a solid rectangle.' };
   }
 
   return { ok: true, color: colors[0] };
@@ -819,12 +830,7 @@ export function extractCutPieces(
       covered.add(pieceKey(piece.index, piece.half));
     });
 
-    const dims = getMergeCutDimensions(
-      merge,
-      cellFinishedWidth,
-      cellFinishedHeight,
-      cellDiagonals
-    );
+    const dims = getMergeCutDimensions(merge, cellFinishedWidth, cellFinishedHeight);
 
     pieces.push({
       color: merge.color.toLowerCase(),
@@ -882,71 +888,11 @@ export function extractCutPieces(
   return pieces;
 }
 
-function mergeCoversCellFully(mergePieces, index, cellDiagonals) {
-  const halves = mergePieces.filter((piece) => piece.index === index);
-  if (!halves.length) {
-    return false;
-  }
-  if (!cellDiagonals?.[index]) {
-    return halves.some((piece) => piece.half == null);
-  }
-  return (
-    halves.some((piece) => piece.half === 'a') &&
-    halves.some((piece) => piece.half === 'b')
-  );
-}
-
-function getMergeCutDimensions(merge, cellFinishedWidth, cellFinishedHeight, cellDiagonals) {
-  const mergePieces =
-    merge.pieces || (merge.cells || []).map((index) => ({ index, half: null }));
-
-  if (
-    mergePieces.length === 1 &&
-    mergePieces[0].half != null &&
-    cellDiagonals?.[mergePieces[0].index]
-  ) {
-    return {
-      finishedWidth: cellFinishedWidth,
-      finishedHeight: cellFinishedHeight,
-      gridWidth: 1,
-      gridHeight: 1,
-      shape: 'triangle',
-    };
-  }
-
-  if (
-    mergePieces.length === 2 &&
-    mergePieces[0].index === mergePieces[1].index &&
-    mergePieces[0].half != null &&
-    mergePieces[1].half != null &&
-    mergePieces[0].half !== mergePieces[1].half
-  ) {
-    return {
-      finishedWidth: cellFinishedWidth,
-      finishedHeight: cellFinishedHeight,
-      gridWidth: 1,
-      gridHeight: 1,
-      shape: 'rect',
-    };
-  }
-
-  const cells = [...new Set(mergePieces.map((piece) => piece.index))];
-  const expected = merge.width * merge.height;
-  const fullyCovered =
-    cells.length === expected &&
-    cells.every((index) => mergeCoversCellFully(mergePieces, index, cellDiagonals));
-
-  if (fullyCovered) {
-    return {
-      finishedWidth: merge.width * cellFinishedWidth,
-      finishedHeight: merge.height * cellFinishedHeight,
-      gridWidth: merge.width,
-      gridHeight: merge.height,
-      shape: 'rect',
-    };
-  }
-
-  // Irregular or partial-cell merges: use bounding box for cut planning.
+/**
+ * Merges are always solid rectangles of whole cells, so the cut piece is the
+ * exact bounding rectangle.
+ */
+function getMergeCutDimensions(merge, cellFinishedWidth, cellFinishedHeight) {
   return {
     finishedWidth: merge.width * cellFinishedWidth,
     finishedHeight: merge.height * cellFinishedHeight,

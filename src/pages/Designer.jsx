@@ -35,7 +35,9 @@ import {
 } from '../mergeUtils';
 import {
   buildYardageReport,
+  BOLT_WIDTH_OPTIONS,
   calculateGridDimensions,
+  DEFAULT_BOLT_WIDTH,
   DEFAULT_SEAM_ALLOWANCE,
   formatDimension,
 } from '../yardageCalculator';
@@ -129,6 +131,7 @@ function Designer() {
   const [eraserMode, setEraserMode] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [seamAllowance, setSeamAllowance] = useState(DEFAULT_SEAM_ALLOWANCE);
+  const [boltWidth, setBoltWidth] = useState(DEFAULT_BOLT_WIDTH);
   const [quiltWidth, setQuiltWidth] = useState(60);
   const [quiltHeight, setQuiltHeight] = useState(80);
   const [blockSize, setBlockSize] = useState(6);
@@ -541,9 +544,9 @@ function Designer() {
     [activeSide]
   );
 
-  /** Add a piece (and pieces skipped by fast drags) to the current merge stroke. */
+  /** Add whole blocks (and blocks skipped by fast drags) to the current merge stroke. */
   const collectMergeStrokePiece = useCallback(
-    (index, half) => {
+    (index) => {
       const side = sides[activeSide];
       const strokeColor = strokeColorRef.current;
       if (!strokeColor) {
@@ -556,40 +559,36 @@ function Designer() {
           : [index];
 
       path.forEach((cellIndex) => {
-        const diagonal = side.cellDiagonals[cellIndex];
-        const halves = diagonal
-          ? cellIndex === index
-            ? [half || 'a']
-            : ['a', 'b']
-          : [null];
+        // Triangle cells can't merge, so a merge stroke passes over them.
+        if (side.cellDiagonals[cellIndex]) {
+          return;
+        }
 
-        halves.forEach((candidateHalf) => {
-          const visitKey = pieceKey(cellIndex, candidateHalf);
-          if (strokeVisitedRef.current.has(visitKey)) {
-            return;
-          }
-          strokeVisitedRef.current.add(visitKey);
+        const visitKey = pieceKey(cellIndex, null);
+        if (strokeVisitedRef.current.has(visitKey)) {
+          return;
+        }
+        strokeVisitedRef.current.add(visitKey);
 
-          const color = getPieceColor(
-            side.cellColors,
-            side.cellColorsB,
-            side.cellDiagonals,
-            cellIndex,
-            candidateHalf
-          );
-          if (!color || color.toLowerCase() !== strokeColor) {
-            return;
-          }
+        const color = getPieceColor(
+          side.cellColors,
+          side.cellColorsB,
+          side.cellDiagonals,
+          cellIndex,
+          null
+        );
+        if (!color || color.toLowerCase() !== strokeColor) {
+          return;
+        }
 
-          getMergedPieces(
-            cellIndex,
-            candidateHalf,
-            side.merges,
-            side.pieceMergeIds,
-            side.cellDiagonals
-          ).forEach((piece) => {
-            mergeStrokeKeysRef.current.add(pieceKey(piece.index, piece.half));
-          });
+        getMergedPieces(
+          cellIndex,
+          null,
+          side.merges,
+          side.pieceMergeIds,
+          side.cellDiagonals
+        ).forEach((piece) => {
+          mergeStrokeKeysRef.current.add(pieceKey(piece.index, piece.half));
         });
       });
 
@@ -671,7 +670,8 @@ function Designer() {
       }
 
       const side = sides[activeSide];
-      const resolvedHalf = side.cellDiagonals[index] ? half || 'a' : null;
+      const hasDiagonal = Boolean(side.cellDiagonals[index]);
+      const resolvedHalf = hasDiagonal ? half || 'a' : null;
       const currentColor = getPieceColor(
         side.cellColors,
         side.cellColorsB,
@@ -681,11 +681,13 @@ function Designer() {
       );
 
       if (
+        !hasDiagonal &&
         currentColor &&
         selectedColor &&
         currentColor.toLowerCase() === selectedColor.toLowerCase()
       ) {
-        // Dragging across pieces that already match the brush color merges them.
+        // Dragging across whole blocks already painted the brush color merges
+        // them. Triangle cells never merge, so they always paint instead.
         strokeModeRef.current = 'merge';
         strokeColorRef.current = currentColor.toLowerCase();
         mergeStrokeKeysRef.current = new Set();
@@ -776,7 +778,7 @@ function Designer() {
       const strokeMode = strokeModeRef.current;
 
       if (strokeMode === 'merge') {
-        collectMergeStrokePiece(index, half);
+        collectMergeStrokePiece(index);
         return;
       }
 
@@ -891,6 +893,17 @@ function Designer() {
     [cellColors, cellColorsB, cellDiagonals]
   );
 
+  // Drives smart enable/disable states so buttons only light up when they can act.
+  const selectionInfo = useMemo(() => {
+    const cellIndices = selectedPiecesToCellIndices(selectedBlocks);
+    const mergeableCount = cellIndices.filter((index) => !cellDiagonals[index]).length;
+    const hasMergedSelection = cellIndices.some((index) => {
+      const ids = pieceMergeIds[index] || { a: null, b: null };
+      return ids.a != null || ids.b != null;
+    });
+    return { mergeableCount, hasMergedSelection };
+  }, [selectedBlocks, cellDiagonals, pieceMergeIds]);
+
   const handleSelectAllColored = useCallback(() => {
     const keys = getColoredPieceKeys(cellColors, cellColorsB, cellDiagonals);
     if (!keys.length) {
@@ -913,18 +926,25 @@ function Designer() {
     setSides((prev) => {
       const side = prev[activeSide];
       if (!side.selectedBlocks.length) {
-        window.alert('Select at least one colored shape to merge.');
+        window.alert('Select at least two colored blocks to merge.');
         return prev;
       }
 
       const pieces = [];
       const seen = new Set();
+      let hadTrianglePieces = false;
 
       side.selectedBlocks.forEach((key) => {
         const piece =
           typeof key === 'number'
             ? { index: key, half: side.cellDiagonals[key] ? 'a' : null }
             : parsePieceKey(key);
+
+        // Triangle cells never merge — skip them so whole-block merges still work.
+        if (side.cellDiagonals[piece.index]) {
+          hadTrianglePieces = true;
+          return;
+        }
 
         getMergedPieces(
           piece.index,
@@ -942,7 +962,11 @@ function Designer() {
       });
 
       if (!pieces.length) {
-        window.alert('Select colored shapes to merge.');
+        window.alert(
+          hadTrianglePieces
+            ? 'Triangles can\u2019t be merged \u2014 they\u2019re cut as individual half-square triangles. Select whole blocks instead.'
+            : 'Select colored blocks to merge.'
+        );
         return prev;
       }
 
@@ -966,9 +990,7 @@ function Designer() {
       );
 
       if (sameColorPieces.length < 2) {
-        window.alert(
-          'Select at least two touching same-color shapes (triangle halves count).'
-        );
+        window.alert('Select at least two same-color blocks that form a rectangle.');
         return prev;
       }
 
@@ -1059,6 +1081,10 @@ function Designer() {
     setSeamAllowance(event.target.value);
   }, []);
 
+  const handleBoltWidthChange = useCallback((event) => {
+    setBoltWidth(Number(event.target.value) || DEFAULT_BOLT_WIDTH);
+  }, []);
+
   const colorLegend = useMemo(() => {
     const counts = {};
     const tally = (color) => {
@@ -1090,6 +1116,7 @@ function Designer() {
       columns: grid.columns,
       rows: grid.rows,
       seamAllowance: Number(seamAllowance) || DEFAULT_SEAM_ALLOWANCE,
+      fabricWidth: boltWidth,
       fabricCatalog,
     });
   }, [
@@ -1105,6 +1132,7 @@ function Designer() {
     sides.back.merges,
     grid,
     seamAllowance,
+    boltWidth,
     fabricCatalog,
   ]);
 
@@ -1128,6 +1156,7 @@ function Designer() {
       {
         cellColorsB: sides.front.cellColorsB,
         cellDiagonals: sides.front.cellDiagonals,
+        fabricWidth: boltWidth,
       }
     );
     const backReport = buildYardageReport(
@@ -1141,6 +1170,7 @@ function Designer() {
       {
         cellColorsB: sides.back.cellColorsB,
         cellDiagonals: sides.back.cellDiagonals,
+        fabricWidth: boltWidth,
       }
     );
 
@@ -1191,6 +1221,7 @@ function Designer() {
     sides.back.merges,
     yardageReport,
     seamAllowance,
+    boltWidth,
   ]);
 
   executePdfDownloadRef.current = executePdfDownload;
@@ -1217,6 +1248,9 @@ function Designer() {
       setBlockSize(restored.blockSize ?? restored.grid?.blockSize ?? 6);
       setQuiltSizePreset(restored.quiltSizePreset);
       setActiveSide(restored.activeSide);
+      if (restored.boltWidth) {
+        setBoltWidth(Number(restored.boltWidth) || DEFAULT_BOLT_WIDTH);
+      }
     }
 
     window.history.replaceState({}, '', window.location.pathname);
@@ -1285,6 +1319,7 @@ function Designer() {
         blockSize,
         quiltSizePreset,
         activeSide,
+        boltWidth,
       });
       await startStripeCheckout({ mode, email: trimmedEmail });
     } catch (error) {
@@ -1292,7 +1327,7 @@ function Designer() {
       window.alert(error.message || 'Unable to start checkout. Please try again.');
       setCheckoutLoading(false);
     }
-  }, [grid, sides, quiltWidth, quiltHeight, blockSize, quiltSizePreset, activeSide]);
+  }, [grid, sides, quiltWidth, quiltHeight, blockSize, quiltSizePreset, activeSide, boltWidth]);
 
   const handlePaySingle = useCallback(
     (email) => {
@@ -1389,6 +1424,22 @@ function Designer() {
                   value={seamAllowance}
                   onChange={handleSeamAllowanceChange}
                 />
+              </div>
+
+              <div className="abby-patch__input-group">
+                <label htmlFor="bolt-width">Fabric bolt width</label>
+                <select
+                  id="bolt-width"
+                  className="abby-patch__select"
+                  value={boltWidth}
+                  onChange={handleBoltWidthChange}
+                >
+                  {BOLT_WIDTH_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <button type="button" className="abby-patch__button" onClick={handleGenerate}>
@@ -1535,7 +1586,7 @@ function Designer() {
                   <p className="abby-patch__tool-hint">
                     {eraserMode
                       ? 'Eraser on — click or drag to remove color'
-                      : 'Click or drag to paint (triangle halves paint separately). Drag across pieces already painted your color to merge them. Right click cuts a diagonal.'}
+                      : 'Click or drag to paint (triangle halves paint separately). Drag across same-color blocks to merge them. Right click cuts a diagonal. Triangles never merge — each is cut as its own half-square triangle.'}
                   </p>
                 </div>
               </section>
@@ -1591,13 +1642,13 @@ function Designer() {
               <div className="abby-patch__pattern-tools">
                 <section
                   className="abby-patch__tool-box abby-patch__panel"
-                  aria-label="Copy and paste"
+                  aria-label="Blocks and patterns"
                 >
-                  <h2 className="abby-patch__section-title">Copy &amp; paste — {activeSideLabel}</h2>
+                  <h2 className="abby-patch__section-title">Blocks &amp; patterns — {activeSideLabel}</h2>
                   <p className="abby-patch__tool-box-desc">
-                    Select same-color shapes — including individual triangle halves — then Merge.
-                    Use Unmerge to split a merged piece. You can also drag across same-color pieces
-                    to merge without selecting.
+                    Merge joins same-color whole blocks into one rectangular cut piece
+                    (triangles always stay separate so the cut list is accurate). Copy and
+                    paste tile a selected motif across the quilt.
                   </p>
                   <div className="abby-patch__tool-box-controls">
                     <button
@@ -1606,7 +1657,7 @@ function Designer() {
                       onClick={handleToggleSelectionMode}
                       aria-pressed={selectionMode}
                     >
-                      Select shapes
+                      Select
                     </button>
                     <button
                       type="button"
@@ -1614,7 +1665,7 @@ function Designer() {
                       onClick={handleSelectAllColored}
                       disabled={!coloredBlockCount}
                     >
-                      Select all colored
+                      Select all
                     </button>
                     <button
                       type="button"
@@ -1622,13 +1673,13 @@ function Designer() {
                       onClick={handleClearSelection}
                       disabled={!selectedBlocks.length}
                     >
-                      Clear selection
+                      Clear
                     </button>
                     <button
                       type="button"
                       className="abby-patch__tool-button"
                       onClick={handleMergeSquares}
-                      disabled={!selectedBlocks.length}
+                      disabled={selectionInfo.mergeableCount < 2}
                     >
                       Merge
                     </button>
@@ -1636,7 +1687,7 @@ function Designer() {
                       type="button"
                       className="abby-patch__tool-button"
                       onClick={handleUnmergeSquares}
-                      disabled={!selectedBlocks.length}
+                      disabled={!selectionInfo.hasMergedSelection}
                     >
                       Unmerge
                     </button>
@@ -1661,8 +1712,12 @@ function Designer() {
                     {copiedPattern
                       ? `${copiedPattern.width}×${copiedPattern.height} pattern ready to paste.`
                       : selectedBlocks.length > 0
-                        ? `${selectedBlocks.length} shape${selectedBlocks.length === 1 ? '' : 's'} selected — merge, copy, or paste.`
-                        : 'Turn on Select shapes, then click a triangle half or block.'}
+                        ? `${selectedBlocks.length} selected — ${
+                            selectionInfo.mergeableCount >= 2
+                              ? 'merge, copy, or paste.'
+                              : 'copy or paste (merging needs 2+ whole blocks).'
+                          }`
+                        : 'Turn on Select, then click blocks or triangle halves.'}
                   </p>
                 </section>
               </div>

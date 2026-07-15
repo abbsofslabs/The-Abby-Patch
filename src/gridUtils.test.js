@@ -8,7 +8,7 @@ import {
   removeBlockSelections,
   selectedPiecesToCellIndices,
 } from './gridUtils';
-import { mergePieces, mergeSelectedBlocks, createEmptyPieceMergeIds } from './mergeUtils';
+import { mergeSelectedBlocks } from './mergeUtils';
 
 test('tiles the selected pattern across the entire grid', () => {
   const rows = 4;
@@ -94,41 +94,31 @@ test('returns an error when the selected pattern has no color', () => {
 
 test('pattern snapshot skips triangle-half merges and keeps full-cell merges', () => {
   const cellColors = Array(16).fill('#123456');
-  const cellColorsB = Array(16).fill('#123456');
-  const cellDiagonals = Array(16).fill(null);
-  cellDiagonals[0] = 'nwse';
 
-  // Half-piece merge (0:a + 1) and a full-cell merge (4 + 5).
-  const halfMerge = mergePieces(
-    [
-      { index: 0, half: 'a' },
-      { index: 1, half: null },
-    ],
-    cellColors,
-    cellColorsB,
-    cellDiagonals,
-    4,
-    4,
-    {},
-    createEmptyPieceMergeIds(16)
-  );
-  const fullMerge = mergePieces(
-    [
-      { index: 4, half: null },
-      { index: 5, half: null },
-    ],
-    cellColors,
-    cellColorsB,
-    cellDiagonals,
-    4,
-    4,
-    halfMerge.merges,
-    halfMerge.pieceMergeIds
-  );
+  const fullMerge = mergeSelectedBlocks(cellColors, [4, 5], 4, {}, Array(16).fill(null));
+
+  // Hand-built legacy half merge — the UI can no longer create these, but old
+  // saved sessions may still contain them.
+  const merges = {
+    ...fullMerge.merges,
+    99: {
+      id: 99,
+      color: '#123456',
+      minRow: 0,
+      minCol: 0,
+      width: 2,
+      height: 1,
+      cells: [0, 1],
+      pieces: [
+        { index: 0, half: 'a' },
+        { index: 1, half: null },
+      ],
+    },
+  };
 
   const snapshot = extractPatternSnapshot(
     cellColors,
-    fullMerge.merges,
+    merges,
     fullMerge.cellMergeIds,
     4,
     [0, 1, 4, 5]

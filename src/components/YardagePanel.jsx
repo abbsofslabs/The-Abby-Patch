@@ -50,10 +50,18 @@ function YardagePanel({
       {showYardage && (
         <p className="abby-patch__yardage-note abby-patch__yardage-note--inline">
           Cut sizes include {formatDimension(seamAllowance)}&Prime; seam allowance on outer edges
-          (merged pieces count as one cut). Half-square triangles use finished + 7/8&Prime; cut squares at
-          1/4&Prime; SA (scaled with your seam setting); matching HSTs pair onto shared squares. Yardage
-          uses 44&Prime; usable width, allows rotating rectangles, and rounds up to the nearest &frac14;
-          yard. Totals combine both quilt sides.
+          (merged blocks count as one cut). Half-square triangles use finished + 7/8&Prime; cut
+          squares at 1/4&Prime; SA (scaled with your seam setting); matching HSTs pair onto shared
+          squares. Yardage uses {formatDimension(yardageReport?.fabricWidth ?? 44)}&Prime; usable
+          bolt width, allows rotating rectangles, and rounds up to the nearest &frac14; yard.
+          Totals combine both quilt sides.
+        </p>
+      )}
+
+      {showYardage && yardageReport?.hasTooWidePieces && (
+        <p className="abby-patch__yardage-note abby-patch__yardage-note--inline">
+          <strong>Heads up:</strong> at least one merged piece is wider than your fabric bolt in
+          both directions. Choose a wider bolt, or unmerge it and piece it from smaller cuts.
         </p>
       )}
 

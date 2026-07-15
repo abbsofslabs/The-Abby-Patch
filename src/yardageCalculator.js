@@ -7,6 +7,16 @@ export const SEAM_ALLOWANCE_PER_SIDE = 0.25;
 export const DEFAULT_SEAM_ALLOWANCE = SEAM_ALLOWANCE_PER_SIDE;
 export const MAX_GRID_SIZE = 60;
 
+/** Common quilting bolt widths (inches). */
+export const BOLT_WIDTH_OPTIONS = [
+  { value: 42, label: '42″ (narrow quilting cotton)' },
+  { value: 44, label: '44″ (standard quilting cotton)' },
+  { value: 45, label: '45″ (standard quilting cotton)' },
+  { value: 54, label: '54″ (decor weight)' },
+  { value: 60, label: '60″ (wide bolt)' },
+];
+export const DEFAULT_BOLT_WIDTH = 44;
+
 export function getCutBlockSize(
   blockWidth,
   blockHeight,
@@ -86,7 +96,12 @@ function normalizeCutKey(cutWidth, cutHeight) {
   return `${a}x${b}`;
 }
 
-function fabricLengthForCutPieces(cutWidth, cutHeight, count) {
+/**
+ * Best strip layout for `count` identical cut pieces on a bolt of the given
+ * usable width. Tries both piece orientations and keeps whichever uses the
+ * least length of fabric (fewer strips breaks ties).
+ */
+function fabricLengthForCutPieces(cutWidth, cutHeight, count, fabricWidth = FABRIC_WIDTH) {
   const orientations = [
     { pieceW: cutWidth, pieceH: cutHeight },
     { pieceW: cutHeight, pieceH: cutWidth },
@@ -96,38 +111,52 @@ function fabricLengthForCutPieces(cutWidth, cutHeight, count) {
   let bestLayout = null;
 
   orientations.forEach((layout) => {
-    if (layout.pieceW > FABRIC_WIDTH + 0.001) {
+    if (layout.pieceW > fabricWidth + 0.001) {
       return;
     }
-    const piecesPerRow = Math.max(1, Math.floor(FABRIC_WIDTH / layout.pieceW));
+    const piecesPerRow = Math.max(1, Math.floor((fabricWidth + 0.001) / layout.pieceW));
     const rowsNeeded = Math.ceil(count / piecesPerRow);
     const fabricLength = rowsNeeded * layout.pieceH;
-    if (fabricLength < bestLength) {
+    if (
+      fabricLength < bestLength - 0.001 ||
+      (Math.abs(fabricLength - bestLength) <= 0.001 &&
+        bestLayout &&
+        rowsNeeded < bestLayout.rowsNeeded)
+    ) {
       bestLength = fabricLength;
       bestLayout = { ...layout, piecesPerRow, rowsNeeded };
     }
   });
 
   if (!bestLayout) {
-    const naiveLength = (count * cutWidth * cutHeight) / FABRIC_WIDTH;
+    // The piece is wider than the bolt in both orientations. It cannot be cut
+    // in one piece — flag it and reserve enough length to cut it lengthwise.
+    const longSide = Math.max(cutWidth, cutHeight);
     return {
-      fabricLength: naiveLength,
+      fabricLength: count * longSide,
       piecesPerRow: 1,
       rowsNeeded: count,
       hasCuttingWaste: true,
+      tooWide: true,
     };
   }
 
-  const widthRemainder = FABRIC_WIDTH - bestLayout.piecesPerRow * bestLayout.pieceW;
+  const widthRemainder = fabricWidth - bestLayout.piecesPerRow * bestLayout.pieceW;
   return {
     fabricLength: bestLength,
     piecesPerRow: bestLayout.piecesPerRow,
     rowsNeeded: bestLayout.rowsNeeded,
     hasCuttingWaste: widthRemainder > 0.001,
+    tooWide: false,
   };
 }
 
-export function calculateColorYardage(count, finishedBlockWidth, finishedBlockHeight) {
+export function calculateColorYardage(
+  count,
+  finishedBlockWidth,
+  finishedBlockHeight,
+  fabricWidth = FABRIC_WIDTH
+) {
   if (!count || !finishedBlockWidth || !finishedBlockHeight) {
     return null;
   }
@@ -137,15 +166,9 @@ export function calculateColorYardage(count, finishedBlockWidth, finishedBlockHe
     finishedBlockHeight
   );
 
-  const layout = fabricLengthForCutPieces(cutWidth, cutHeight, count);
-  const fabricSqIn = FABRIC_WIDTH * layout.fabricLength;
-  let yards = roundUpToQuarter(fabricSqIn / SQ_IN_PER_YARD);
-
-  if (layout.hasCuttingWaste) {
-    const naiveSqIn = count * cutWidth * cutHeight;
-    yards = Math.max(yards, roundUpToQuarter(naiveSqIn / SQ_IN_PER_YARD));
-    yards = roundUpToQuarter(yards);
-  }
+  const layout = fabricLengthForCutPieces(cutWidth, cutHeight, count, fabricWidth);
+  const fabricSqIn = fabricWidth * layout.fabricLength;
+  const yards = roundUpToQuarter(layout.fabricLength / YARD_LENGTH);
 
   return {
     count,
@@ -154,10 +177,15 @@ export function calculateColorYardage(count, finishedBlockWidth, finishedBlockHe
     sqInWithSeam: fabricSqIn,
     yards,
     hasCuttingWaste: layout.hasCuttingWaste,
+    tooWide: layout.tooWide,
   };
 }
 
-export function calculatePiecesYardage(pieces, seamAllowance = DEFAULT_SEAM_ALLOWANCE) {
+export function calculatePiecesYardage(
+  pieces,
+  seamAllowance = DEFAULT_SEAM_ALLOWANCE,
+  fabricWidth = FABRIC_WIDTH
+) {
   if (!pieces.length) {
     return { yards: 0, sqInWithSeam: 0, cutPieces: [] };
   }
@@ -202,18 +230,24 @@ export function calculatePiecesYardage(pieces, seamAllowance = DEFAULT_SEAM_ALLO
   let totalSqIn = 0;
   let totalYards = 0;
   let hasCuttingWaste = false;
+  let hasTooWidePieces = false;
 
   cutPieces.forEach((group) => {
     const layoutCount = group.squaresNeeded ?? group.count;
-    const layout = fabricLengthForCutPieces(group.cutWidth, group.cutHeight, layoutCount);
-    const fabricSqIn = FABRIC_WIDTH * layout.fabricLength;
-    let yards = roundUpToQuarter(fabricSqIn / SQ_IN_PER_YARD);
+    const layout = fabricLengthForCutPieces(
+      group.cutWidth,
+      group.cutHeight,
+      layoutCount,
+      fabricWidth
+    );
+    const fabricSqIn = fabricWidth * layout.fabricLength;
+    const yards = roundUpToQuarter(layout.fabricLength / YARD_LENGTH);
 
     if (layout.hasCuttingWaste) {
-      const naiveSqIn = layoutCount * group.cutWidth * group.cutHeight;
-      yards = Math.max(yards, roundUpToQuarter(naiveSqIn / SQ_IN_PER_YARD));
-      yards = roundUpToQuarter(yards);
       hasCuttingWaste = true;
+    }
+    if (layout.tooWide) {
+      hasTooWidePieces = true;
     }
 
     group.yards = yards;
@@ -221,6 +255,7 @@ export function calculatePiecesYardage(pieces, seamAllowance = DEFAULT_SEAM_ALLO
     group.blocksPerRow = layout.piecesPerRow;
     group.rowsNeeded = layout.rowsNeeded;
     group.hasCuttingWaste = layout.hasCuttingWaste;
+    group.tooWide = layout.tooWide;
     totalSqIn += fabricSqIn;
     totalYards += yards;
   });
@@ -230,6 +265,7 @@ export function calculatePiecesYardage(pieces, seamAllowance = DEFAULT_SEAM_ALLO
     sqInWithSeam: totalSqIn,
     cutPieces,
     hasCuttingWaste,
+    hasTooWidePieces,
   };
 }
 
@@ -244,7 +280,7 @@ export function countColorsByHex(cellColors) {
   return counts;
 }
 
-function buildSideYardageFromPieces(pieces, seamAllowance) {
+function buildSideYardageFromPieces(pieces, seamAllowance, fabricWidth) {
   const byColor = new Map();
   pieces.forEach((piece) => {
     if (!byColor.has(piece.color)) {
@@ -255,7 +291,7 @@ function buildSideYardageFromPieces(pieces, seamAllowance) {
 
   const colors = [...byColor.entries()]
     .map(([color, colorPieces]) => {
-      const yardage = calculatePiecesYardage(colorPieces, seamAllowance);
+      const yardage = calculatePiecesYardage(colorPieces, seamAllowance, fabricWidth);
       return {
         color,
         count: colorPieces.length,
@@ -279,19 +315,36 @@ export function buildYardageReport(
   seamAllowance = DEFAULT_SEAM_ALLOWANCE,
   options = {}
 ) {
+  const fabricWidth = Number(options.fabricWidth) || DEFAULT_BOLT_WIDTH;
   const blockSize = calculateBlockSize(quiltWidth, quiltHeight, columns, rows);
   if (!blockSize) {
-    return { blockSize: null, colors: [], totalYards: 0, cutPieces: [], seamAllowance };
+    return {
+      blockSize: null,
+      colors: [],
+      totalYards: 0,
+      cutPieces: [],
+      seamAllowance,
+      fabricWidth,
+    };
   }
 
   const pieces = extractCutPieces(cellColors, merges || {}, blockSize.width, blockSize.height, {
     cellColorsB: options.cellColorsB,
     cellDiagonals: options.cellDiagonals,
   });
-  const { colors, totalYards } = buildSideYardageFromPieces(pieces, seamAllowance);
+  const { colors, totalYards } = buildSideYardageFromPieces(pieces, seamAllowance, fabricWidth);
   const allCutPieces = colors.flatMap((row) => row.cutPieces || []);
 
-  return { blockSize, colors, totalYards, cutPieces: allCutPieces, pieces, seamAllowance };
+  return {
+    blockSize,
+    colors,
+    totalYards,
+    cutPieces: allCutPieces,
+    pieces,
+    seamAllowance,
+    fabricWidth,
+    hasTooWidePieces: colors.some((row) => row.hasTooWidePieces),
+  };
 }
 
 export function buildCombinedYardageReport(
@@ -306,6 +359,7 @@ export function buildCombinedYardageReport(
   seamAllowance = DEFAULT_SEAM_ALLOWANCE,
   options = {}
 ) {
+  const fabricWidth = Number(options.fabricWidth) || DEFAULT_BOLT_WIDTH;
   const blockSize = calculateBlockSize(quiltWidth, quiltHeight, columns, rows);
   if (!blockSize) {
     return {
@@ -316,16 +370,19 @@ export function buildCombinedYardageReport(
       backTotalYards: 0,
       cutPieces: [],
       seamAllowance,
+      fabricWidth,
     };
   }
 
   const frontOptions = {
     cellColorsB: options.frontCellColorsB,
     cellDiagonals: options.frontCellDiagonals,
+    fabricWidth,
   };
   const backOptions = {
     cellColorsB: options.backCellColorsB,
     cellDiagonals: options.backCellDiagonals,
+    fabricWidth,
   };
 
   const frontReport = buildYardageReport(
@@ -391,7 +448,7 @@ export function buildCombinedYardageReport(
 
   const colors = [...byColor.values()]
     .map((entry) => {
-      const yardage = calculatePiecesYardage(entry.pieces, seamAllowance);
+      const yardage = calculatePiecesYardage(entry.pieces, seamAllowance, fabricWidth);
       return {
         color: entry.color,
         frontCount: entry.frontCount,
@@ -412,6 +469,8 @@ export function buildCombinedYardageReport(
     backTotalYards: backReport.totalYards,
     cutPieces: colors.flatMap((row) => row.cutPieces || []),
     seamAllowance,
+    fabricWidth,
+    hasTooWidePieces: colors.some((row) => row.hasTooWidePieces),
   };
 }
 

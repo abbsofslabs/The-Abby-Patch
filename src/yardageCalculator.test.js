@@ -77,4 +77,49 @@ describe('yardageCalculator merge support', () => {
     expect(hst.cutWidth).toBeCloseTo(6.875, 5);
     expect(hst.label).toContain('HST');
   });
+
+  test('wider bolts need the same or less yardage', () => {
+    // 40 squares cut at 6.5": 6 per strip on 44", 9 per strip on 60".
+    const pieces = Array.from({ length: 40 }, () => ({
+      color: '#556677',
+      finishedWidth: 6,
+      finishedHeight: 6,
+    }));
+
+    const narrow = calculatePiecesYardage(pieces, 0.25, 44);
+    const wide = calculatePiecesYardage(pieces, 0.25, 60);
+
+    // 44": ceil(40/6)=7 strips × 6.5" = 45.5" → 1.5 yd.
+    expect(narrow.yards).toBe(1.5);
+    // 60": ceil(40/9)=5 strips × 6.5" = 32.5" → 1 yd.
+    expect(wide.yards).toBe(1);
+  });
+
+  test('yards come from bolt length, not square inches', () => {
+    // One 20"-cut square on a 60" bolt still needs 20" of length (0.75 yd rounded).
+    const result = calculatePiecesYardage(
+      [{ color: '#889900', finishedWidth: 19.5, finishedHeight: 19.5 }],
+      0.25,
+      60
+    );
+    expect(result.yards).toBe(0.75);
+  });
+
+  test('flags pieces wider than the bolt in both directions', () => {
+    const result = calculatePiecesYardage(
+      [{ color: '#101010', finishedWidth: 70, finishedHeight: 70 }],
+      0.25,
+      44
+    );
+    expect(result.hasTooWidePieces).toBe(true);
+    expect(result.cutPieces[0].tooWide).toBe(true);
+  });
+
+  test('buildYardageReport threads the fabric width through', () => {
+    const cellColors = ['#334455'];
+    const report = buildYardageReport(cellColors, {}, 6, 6, 1, 1, 0.25, {
+      fabricWidth: 60,
+    });
+    expect(report.fabricWidth).toBe(60);
+  });
 });

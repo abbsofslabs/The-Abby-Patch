@@ -156,13 +156,14 @@ function drawSwatchLabel(pdf, x, y, color, label, swatchSize = SWATCH_SIZE, maxL
 function formatCuttingInstruction(piece) {
   if (piece.shape === 'triangle') {
     const squares = piece.squaresNeeded ?? Math.ceil(piece.count / 2);
-    return `Cut ${piece.count} half-square triangle${piece.count === 1 ? '' : 's'} (from ${squares} square${squares === 1 ? '' : 's'} at ${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} inches)`;
+    return `Cut ${piece.count} half-square triangle${piece.count === 1 ? '' : 's'} (from ${squares} square${squares === 1 ? '' : 's'} at ${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} inches, cut once on the diagonal)`;
   }
   const unit = piece.cutWidth === piece.cutHeight ? 'squares' : 'rectangles';
-  return `Cut ${piece.count} ${unit} at ${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} inches`;
+  const tooWideNote = piece.tooWide ? ' — wider than the bolt, piece from smaller cuts' : '';
+  return `Cut ${piece.count} ${unit} at ${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} inches${tooWideNote}`;
 }
 
-function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, seamAllowance) {
+function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, seamAllowance, fabricWidth = 44) {
   const rows = colors.filter((row) => (row.cutPieces?.length ? row.cutPieces : []).some((p) => p.count > 0));
   if (!rows.length || !blockSize) {
     return;
@@ -187,7 +188,7 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, sea
     `Grid cell: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in finished. ` +
       `Merged pieces use one seam allowance on outer edges only (${formatDimension(seamAllowance)} in per side). ` +
       `Half-square triangles use the classic finished + 7/8 in cut square at 1/4 in seam allowance (scaled with your seam setting); two matching HSTs share one cut square. ` +
-      `Yardage assumes 44 in usable width and allows rotating rectangles.`,
+      `Yardage assumes ${formatDimension(fabricWidth)} in usable bolt width and allows rotating rectangles.`,
     MARGIN,
     CONTENT_WIDTH,
     MIN_FONT + 8
@@ -401,7 +402,8 @@ export async function generateQuiltPdf({
     colorLabels,
     frontReport.blockSize,
     'Front cutting guide',
-    frontReport.seamAllowance ?? SEAM_ALLOWANCE_PER_SIDE
+    frontReport.seamAllowance ?? SEAM_ALLOWANCE_PER_SIDE,
+    frontReport.fabricWidth
   );
 
   drawSectionHeading(ctx, 'Back');
@@ -418,7 +420,8 @@ export async function generateQuiltPdf({
     colorLabels,
     backReport.blockSize,
     'Back cutting guide',
-    backReport.seamAllowance ?? SEAM_ALLOWANCE_PER_SIDE
+    backReport.seamAllowance ?? SEAM_ALLOWANCE_PER_SIDE,
+    backReport.fabricWidth
   );
 
   ctx.ensureSpace(SECTION_FONT + CUTTING_ROW_HEIGHT * 2);
@@ -428,7 +431,9 @@ export async function generateQuiltPdf({
     combinedReport.colors,
     colorLabels,
     combinedReport.blockSize,
-    'Combined cutting guide'
+    'Combined cutting guide',
+    combinedReport.seamAllowance ?? SEAM_ALLOWANCE_PER_SIDE,
+    combinedReport.fabricWidth
   );
 
   ctx.pdf.save('abby-patch-quilt-pattern.pdf');

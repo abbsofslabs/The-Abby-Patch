@@ -1284,11 +1284,22 @@
 }
 
 .abby-patch__tool-box-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  justify-content: flex-start;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.abby-patch__tool-box-controls .abby-patch__tool-button,
+.abby-patch__tool-box-controls .abby-patch__button {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.abby-patch__tool-box-controls .abby-patch__button--tile {
+  grid-column: 1 / -1;
 }
 
 .abby-patch__tool-box-hint {

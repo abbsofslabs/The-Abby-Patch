@@ -39,6 +39,7 @@ export function buildFabricPricingReport({
   columns,
   rows,
   seamAllowance,
+  fabricWidth,
   fabricCatalog,
 }) {
   const yardageReport = buildCombinedYardageReport(
@@ -56,6 +57,7 @@ export function buildFabricPricingReport({
       frontCellDiagonals,
       backCellColorsB,
       backCellDiagonals,
+      fabricWidth,
     }
   );
 

@@ -2,7 +2,6 @@ import {
   cellsBetween,
   createEmptyPieceMergeIds,
   extractCutPieces,
-  getAdjacentPieces,
   getMergedCellIndices,
   mergePieces,
   mergeSelectedBlocks,
@@ -79,7 +78,7 @@ describe('mergeUtils', () => {
     expect(mergedPiece.finishedHeight).toBe(6);
   });
 
-  test('merges a triangle half with an adjacent square', () => {
+  test('rejects merging a triangle half with an adjacent square', () => {
     const cellColors = Array(4).fill(null);
     const cellColorsB = Array(4).fill(null);
     const cellDiagonals = Array(4).fill(null);
@@ -87,14 +86,6 @@ describe('mergeUtils', () => {
     cellColorsB[0] = '#eeeeee';
     cellDiagonals[0] = 'nwse';
     cellColors[1] = '#c45c26';
-
-    const adjacent = getAdjacentPieces(0, 'a', 2, 2, cellDiagonals);
-    expect(adjacent).toEqual(
-      expect.arrayContaining([
-        { index: 0, half: 'b' },
-        { index: 1, half: null },
-      ])
-    );
 
     const merged = mergePieces(
       [
@@ -110,20 +101,14 @@ describe('mergeUtils', () => {
       createEmptyPieceMergeIds(4)
     );
 
-    expect(merged.ok).toBe(true);
-    expect(merged.pieceMergeIds[0].a).toBe(merged.pieceMergeIds[1].a);
-    expect(merged.pieceMergeIds[0].b).toBeNull();
-    expect(merged.merges[merged.pieceMergeIds[0].a].pieces).toHaveLength(2);
+    expect(merged.ok).toBe(false);
+    expect(merged.message).toMatch(/Triangles/i);
   });
 
-  test('merges two touching triangle halves across cells', () => {
+  test('rejects merging two touching triangle halves across cells', () => {
     const cellColors = ['#224466', '#ffffff', null, null];
     const cellColorsB = ['#ffffff', '#224466', null, null];
     const cellDiagonals = ['nwse', 'nwse', null, null];
-
-    // Cell 0 half A owns the right edge; cell 1 half B owns the left edge.
-    const adjacent = getAdjacentPieces(0, 'a', 2, 2, cellDiagonals);
-    expect(adjacent).toEqual(expect.arrayContaining([{ index: 1, half: 'b' }]));
 
     const merged = mergePieces(
       [
@@ -139,10 +124,29 @@ describe('mergeUtils', () => {
       createEmptyPieceMergeIds(4)
     );
 
-    expect(merged.ok).toBe(true);
-    expect(merged.pieceMergeIds[0].a).toBe(merged.pieceMergeIds[1].b);
-    expect(merged.pieceMergeIds[0].b).toBeNull();
-    expect(merged.pieceMergeIds[1].a).toBeNull();
+    expect(merged.ok).toBe(false);
+    expect(merged.message).toMatch(/Triangles/i);
+  });
+
+  test('rejects merging whole blocks that do not form a rectangle', () => {
+    const cellColors = ['#112233', '#112233', null, '#112233'];
+    const result = mergePieces(
+      [
+        { index: 0, half: null },
+        { index: 1, half: null },
+        { index: 3, half: null },
+      ],
+      cellColors,
+      Array(4).fill(null),
+      Array(4).fill(null),
+      2,
+      2,
+      {},
+      createEmptyPieceMergeIds(4)
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/rectangle/i);
   });
 
   test('extractCutPieces lists each triangle half with seam-ready dimensions', () => {
@@ -174,14 +178,14 @@ describe('mergeUtils', () => {
     );
   });
 
-  test('extractCutPieces keeps unmerged triangle half when the other half is merged', () => {
-    const cellColors = ['#aa0000', '#aa0000', null, null];
+  test('extractCutPieces lists triangle halves individually beside a block merge', () => {
+    const cellColors = ['#aa0000', null, '#aa0000', '#aa0000'];
     const cellColorsB = ['#00aa00', null, null, null];
     const cellDiagonals = ['nwse', null, null, null];
     const merged = mergePieces(
       [
-        { index: 0, half: 'a' },
-        { index: 1, half: null },
+        { index: 2, half: null },
+        { index: 3, half: null },
       ],
       cellColors,
       cellColorsB,
@@ -192,6 +196,8 @@ describe('mergeUtils', () => {
       createEmptyPieceMergeIds(4)
     );
 
+    expect(merged.ok).toBe(true);
+
     const pieces = extractCutPieces(cellColors, merged.merges, 6, 6, {
       cellColorsB,
       cellDiagonals,
@@ -199,11 +205,12 @@ describe('mergeUtils', () => {
 
     expect(pieces).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ color: '#aa0000', shape: 'rect' }),
+        expect.objectContaining({ color: '#aa0000', shape: 'rect', finishedWidth: 12 }),
+        expect.objectContaining({ color: '#aa0000', shape: 'triangle' }),
         expect.objectContaining({ color: '#00aa00', shape: 'triangle' }),
       ])
     );
-    expect(pieces).toHaveLength(2);
+    expect(pieces).toHaveLength(3);
   });
 
   test('rejects merging disconnected same-color pieces', () => {
