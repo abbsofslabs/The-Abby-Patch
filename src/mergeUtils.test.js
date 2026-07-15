@@ -2,6 +2,7 @@ import {
   cellsBetween,
   createEmptyPieceMergeIds,
   extractCutPieces,
+  getMergeBorders,
   getMergedCellIndices,
   mergePieces,
   mergeSelectedBlocks,
@@ -78,7 +79,7 @@ describe('mergeUtils', () => {
     expect(mergedPiece.finishedHeight).toBe(6);
   });
 
-  test('rejects merging a triangle half with an adjacent square', () => {
+  test('merges a triangle half with an adjacent square', () => {
     const cellColors = Array(4).fill(null);
     const cellColorsB = Array(4).fill(null);
     const cellDiagonals = Array(4).fill(null);
@@ -101,11 +102,13 @@ describe('mergeUtils', () => {
       createEmptyPieceMergeIds(4)
     );
 
-    expect(merged.ok).toBe(false);
-    expect(merged.message).toMatch(/Triangles/i);
+    expect(merged.ok).toBe(true);
+    expect(merged.pieceMergeIds[0].a).toBe(merged.pieceMergeIds[1].a);
+    expect(merged.pieceMergeIds[0].b).toBeNull();
+    expect(merged.merges[merged.pieceMergeIds[0].a].pieces).toHaveLength(2);
   });
 
-  test('rejects merging two touching triangle halves across cells', () => {
+  test('merges two touching triangle halves across cells', () => {
     const cellColors = ['#224466', '#ffffff', null, null];
     const cellColorsB = ['#ffffff', '#224466', null, null];
     const cellDiagonals = ['nwse', 'nwse', null, null];
@@ -124,8 +127,48 @@ describe('mergeUtils', () => {
       createEmptyPieceMergeIds(4)
     );
 
-    expect(merged.ok).toBe(false);
-    expect(merged.message).toMatch(/Triangles/i);
+    expect(merged.ok).toBe(true);
+    expect(merged.pieceMergeIds[0].a).toBe(merged.pieceMergeIds[1].b);
+    expect(merged.pieceMergeIds[0].b).toBeNull();
+    expect(merged.pieceMergeIds[1].a).toBeNull();
+  });
+
+  test('hides the shared seam when a triangle half merges into a square', () => {
+    const cellColors = ['#c45c26', '#c45c26', null, null];
+    const cellColorsB = ['#eeeeee', null, null, null];
+    const cellDiagonals = ['nwse', null, null, null];
+
+    const merged = mergePieces(
+      [
+        { index: 0, half: 'a' },
+        { index: 1, half: null },
+      ],
+      cellColors,
+      cellColorsB,
+      cellDiagonals,
+      2,
+      2,
+      {},
+      createEmptyPieceMergeIds(4)
+    );
+
+    expect(merged.ok).toBe(true);
+
+    const leftBorders = getMergeBorders(0, 2, merged.merges, merged.cellMergeIds, {
+      rows: 2,
+      pieceMergeIds: merged.pieceMergeIds,
+      cellDiagonals,
+    });
+    const rightBorders = getMergeBorders(1, 2, merged.merges, merged.cellMergeIds, {
+      rows: 2,
+      pieceMergeIds: merged.pieceMergeIds,
+      cellDiagonals,
+    });
+
+    expect(leftBorders.hideRight).toBe(true);
+    expect(rightBorders.hideLeft).toBe(true);
+    // The other triangle half is not in the merge, so the diagonal cut stays.
+    expect(leftBorders.showDiagonal).toBe(true);
   });
 
   test('rejects merging whole blocks that do not form a rectangle', () => {

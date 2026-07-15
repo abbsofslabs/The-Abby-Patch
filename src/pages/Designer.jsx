@@ -544,9 +544,9 @@ function Designer() {
     [activeSide]
   );
 
-  /** Add whole blocks (and blocks skipped by fast drags) to the current merge stroke. */
+  /** Add a piece (and pieces skipped by fast drags) to the current merge stroke. */
   const collectMergeStrokePiece = useCallback(
-    (index) => {
+    (index, half) => {
       const side = sides[activeSide];
       const strokeColor = strokeColorRef.current;
       if (!strokeColor) {
@@ -559,36 +559,40 @@ function Designer() {
           : [index];
 
       path.forEach((cellIndex) => {
-        // Triangle cells can't merge, so a merge stroke passes over them.
-        if (side.cellDiagonals[cellIndex]) {
-          return;
-        }
+        const diagonal = side.cellDiagonals[cellIndex];
+        const halves = diagonal
+          ? cellIndex === index
+            ? [half || 'a']
+            : ['a', 'b']
+          : [null];
 
-        const visitKey = pieceKey(cellIndex, null);
-        if (strokeVisitedRef.current.has(visitKey)) {
-          return;
-        }
-        strokeVisitedRef.current.add(visitKey);
+        halves.forEach((candidateHalf) => {
+          const visitKey = pieceKey(cellIndex, candidateHalf);
+          if (strokeVisitedRef.current.has(visitKey)) {
+            return;
+          }
+          strokeVisitedRef.current.add(visitKey);
 
-        const color = getPieceColor(
-          side.cellColors,
-          side.cellColorsB,
-          side.cellDiagonals,
-          cellIndex,
-          null
-        );
-        if (!color || color.toLowerCase() !== strokeColor) {
-          return;
-        }
+          const color = getPieceColor(
+            side.cellColors,
+            side.cellColorsB,
+            side.cellDiagonals,
+            cellIndex,
+            candidateHalf
+          );
+          if (!color || color.toLowerCase() !== strokeColor) {
+            return;
+          }
 
-        getMergedPieces(
-          cellIndex,
-          null,
-          side.merges,
-          side.pieceMergeIds,
-          side.cellDiagonals
-        ).forEach((piece) => {
-          mergeStrokeKeysRef.current.add(pieceKey(piece.index, piece.half));
+          getMergedPieces(
+            cellIndex,
+            candidateHalf,
+            side.merges,
+            side.pieceMergeIds,
+            side.cellDiagonals
+          ).forEach((piece) => {
+            mergeStrokeKeysRef.current.add(pieceKey(piece.index, piece.half));
+          });
         });
       });
 
@@ -670,8 +674,7 @@ function Designer() {
       }
 
       const side = sides[activeSide];
-      const hasDiagonal = Boolean(side.cellDiagonals[index]);
-      const resolvedHalf = hasDiagonal ? half || 'a' : null;
+      const resolvedHalf = side.cellDiagonals[index] ? half || 'a' : null;
       const currentColor = getPieceColor(
         side.cellColors,
         side.cellColorsB,
@@ -681,13 +684,11 @@ function Designer() {
       );
 
       if (
-        !hasDiagonal &&
         currentColor &&
         selectedColor &&
         currentColor.toLowerCase() === selectedColor.toLowerCase()
       ) {
-        // Dragging across whole blocks already painted the brush color merges
-        // them. Triangle cells never merge, so they always paint instead.
+        // Dragging across pieces that already match the brush color merges them.
         strokeModeRef.current = 'merge';
         strokeColorRef.current = currentColor.toLowerCase();
         mergeStrokeKeysRef.current = new Set();
@@ -778,7 +779,7 @@ function Designer() {
       const strokeMode = strokeModeRef.current;
 
       if (strokeMode === 'merge') {
-        collectMergeStrokePiece(index);
+        collectMergeStrokePiece(index, half);
         return;
       }
 
@@ -896,13 +897,15 @@ function Designer() {
   // Drives smart enable/disable states so buttons only light up when they can act.
   const selectionInfo = useMemo(() => {
     const cellIndices = selectedPiecesToCellIndices(selectedBlocks);
-    const mergeableCount = cellIndices.filter((index) => !cellDiagonals[index]).length;
     const hasMergedSelection = cellIndices.some((index) => {
       const ids = pieceMergeIds[index] || { a: null, b: null };
       return ids.a != null || ids.b != null;
     });
-    return { mergeableCount, hasMergedSelection };
-  }, [selectedBlocks, cellDiagonals, pieceMergeIds]);
+    return {
+      mergeableCount: selectedBlocks.length,
+      hasMergedSelection,
+    };
+  }, [selectedBlocks, pieceMergeIds]);
 
   const handleSelectAllColored = useCallback(() => {
     const keys = getColoredPieceKeys(cellColors, cellColorsB, cellDiagonals);
@@ -926,25 +929,18 @@ function Designer() {
     setSides((prev) => {
       const side = prev[activeSide];
       if (!side.selectedBlocks.length) {
-        window.alert('Select at least two colored blocks to merge.');
+        window.alert('Select at least two colored shapes to merge.');
         return prev;
       }
 
       const pieces = [];
       const seen = new Set();
-      let hadTrianglePieces = false;
 
       side.selectedBlocks.forEach((key) => {
         const piece =
           typeof key === 'number'
             ? { index: key, half: side.cellDiagonals[key] ? 'a' : null }
             : parsePieceKey(key);
-
-        // Triangle cells never merge — skip them so whole-block merges still work.
-        if (side.cellDiagonals[piece.index]) {
-          hadTrianglePieces = true;
-          return;
-        }
 
         getMergedPieces(
           piece.index,
@@ -962,11 +958,7 @@ function Designer() {
       });
 
       if (!pieces.length) {
-        window.alert(
-          hadTrianglePieces
-            ? 'Triangles can\u2019t be merged \u2014 they\u2019re cut as individual half-square triangles. Select whole blocks instead.'
-            : 'Select colored blocks to merge.'
-        );
+        window.alert('Select colored shapes to merge.');
         return prev;
       }
 
@@ -990,7 +982,9 @@ function Designer() {
       );
 
       if (sameColorPieces.length < 2) {
-        window.alert('Select at least two same-color blocks that form a rectangle.');
+        window.alert(
+          'Select at least two touching same-color shapes (triangle halves count).'
+        );
         return prev;
       }
 
@@ -1586,7 +1580,7 @@ function Designer() {
                   <p className="abby-patch__tool-hint">
                     {eraserMode
                       ? 'Eraser on — click or drag to remove color'
-                      : 'Click or drag to paint (triangle halves paint separately). Drag across same-color blocks to merge them. Right click cuts a diagonal. Triangles never merge — each is cut as its own half-square triangle.'}
+                      : 'Click or drag to paint (triangle halves paint separately). Drag across same-color shapes — including triangle halves — to merge them. Right click cuts a diagonal.'}
                   </p>
                 </div>
               </section>
@@ -1646,9 +1640,10 @@ function Designer() {
                 >
                   <h2 className="abby-patch__section-title">Blocks &amp; patterns — {activeSideLabel}</h2>
                   <p className="abby-patch__tool-box-desc">
-                    Merge joins same-color whole blocks into one rectangular cut piece
-                    (triangles always stay separate so the cut list is accurate). Copy and
-                    paste tile a selected motif across the quilt.
+                    Merge joins same-color shapes that touch — whole blocks or triangle
+                    halves. Whole-block merges must form a rectangle; triangle merges can
+                    be any connected shape. Copy and paste tile a selected motif across
+                    the quilt.
                   </p>
                   <div className="abby-patch__tool-box-controls">
                     <button
@@ -1715,7 +1710,7 @@ function Designer() {
                         ? `${selectedBlocks.length} selected — ${
                             selectionInfo.mergeableCount >= 2
                               ? 'merge, copy, or paste.'
-                              : 'copy or paste (merging needs 2+ whole blocks).'
+                              : 'copy or paste (merging needs 2+ shapes).'
                           }`
                         : 'Turn on Select, then click blocks or triangle halves.'}
                   </p>

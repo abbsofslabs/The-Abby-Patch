@@ -2,6 +2,9 @@ import { memo, useCallback } from 'react';
 import { CREAM } from '../constants';
 import { getHalfFromPointerEvent } from '../triangleUtils';
 
+/** Bleed past a merge-hidden edge so same-color fills underlap the neighbor. */
+const BLEED = 1.5;
+
 function SelectionPoly({ points }) {
   return (
     <polygon
@@ -10,6 +13,54 @@ function SelectionPoly({ points }) {
       aria-hidden="true"
     />
   );
+}
+
+function nwsePolygons(fillA, fillB, selectedA, selectedB, hideTop, hideRight, hideBottom, hideLeft) {
+  // Half A owns top + right; half B owns bottom + left.
+  const aT = hideTop ? -BLEED : 0;
+  const aR = hideRight ? 100 + BLEED : 100;
+  const bB = hideBottom ? 100 + BLEED : 100;
+  const bL = hideLeft ? -BLEED : 0;
+  const polyA = `0,${aT} ${aR},${aT} ${aR},100`;
+  const polyB = `${bL},0 ${bL},${bB} 100,${bB}`;
+  return (
+    <>
+      <polygon points={polyA} fill={fillA} />
+      <polygon points={polyB} fill={fillB} />
+      {/* Inset the cut line so its stroke never spills into a merged neighbor. */}
+      <line x1="2" y1="2" x2="98" y2="98" />
+      {selectedA && <SelectionPoly points={polyA} />}
+      {selectedB && <SelectionPoly points={polyB} />}
+    </>
+  );
+}
+
+function neswPolygons(fillA, fillB, selectedA, selectedB, hideTop, hideRight, hideBottom, hideLeft) {
+  // Half A owns top + left; half B owns bottom + right.
+  const aT = hideTop ? -BLEED : 0;
+  const aL = hideLeft ? -BLEED : 0;
+  const bB = hideBottom ? 100 + BLEED : 100;
+  const bR = hideRight ? 100 + BLEED : 100;
+  const polyA = `${aL},${aT} 100,${aT} ${aL},100`;
+  const polyB = `${bR},0 ${bR},${bB} 0,${bB}`;
+  return (
+    <>
+      <polygon points={polyA} fill={fillA} />
+      <polygon points={polyB} fill={fillB} />
+      <line x1="98" y1="2" x2="2" y2="98" />
+      {selectedA && <SelectionPoly points={polyA} />}
+      {selectedB && <SelectionPoly points={polyB} />}
+    </>
+  );
+}
+
+function mergeBleedShadow(fill, hideTop, hideRight, hideBottom, hideLeft) {
+  const shadows = [];
+  if (hideTop) shadows.push(`0 -1px 0 0 ${fill}`);
+  if (hideRight) shadows.push(`1px 0 0 0 ${fill}`);
+  if (hideBottom) shadows.push(`0 1px 0 0 ${fill}`);
+  if (hideLeft) shadows.push(`-1px 0 0 0 ${fill}`);
+  return shadows.length ? shadows.join(', ') : undefined;
 }
 
 function GridCell({
@@ -88,27 +139,36 @@ function GridCell({
       ? `${mergeBorders.mergeWidth}×${mergeBorders.mergeHeight}`
       : null;
   const isSelected = selectedFull || selectedA || selectedB;
+  const hideTop = Boolean(mergeBorders?.hideTop);
+  const hideBottom = Boolean(mergeBorders?.hideBottom);
+  const hideLeft = Boolean(mergeBorders?.hideLeft);
+  const hideRight = Boolean(mergeBorders?.hideRight);
 
   const className = [
     'abby-patch__cell',
     isSelected ? 'abby-patch__cell--selected' : '',
-    mergeBorders?.hideTop ? 'abby-patch__cell--merge-hide-top' : '',
-    mergeBorders?.hideBottom ? 'abby-patch__cell--merge-hide-bottom' : '',
-    mergeBorders?.hideLeft ? 'abby-patch__cell--merge-hide-left' : '',
-    mergeBorders?.hideRight ? 'abby-patch__cell--merge-hide-right' : '',
+    hideTop ? 'abby-patch__cell--merge-hide-top' : '',
+    hideBottom ? 'abby-patch__cell--merge-hide-bottom' : '',
+    hideLeft ? 'abby-patch__cell--merge-hide-left' : '',
+    hideRight ? 'abby-patch__cell--merge-hide-right' : '',
     mergeBorders?.isAnchor ? 'abby-patch__cell--merge-anchor' : '',
     showDiagonal ? 'abby-patch__cell--diagonal' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
+  const cellStyle = showDiagonal
+    ? { backgroundColor: 'transparent' }
+    : {
+        backgroundColor: fillA,
+        boxShadow: mergeBleedShadow(fillA, hideTop, hideRight, hideBottom, hideLeft),
+      };
+
   return (
     <button
       type="button"
       className={className}
-      style={
-        showDiagonal ? { backgroundColor: 'transparent' } : { backgroundColor: fillA }
-      }
+      style={cellStyle}
       onPointerDown={handlePointerDown}
       onPointerEnter={handlePointerEnter}
       onPointerMove={handlePointerMove}
@@ -124,23 +184,27 @@ function GridCell({
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          {diagonal === 'nwse' ? (
-            <>
-              <polygon points="0,0 100,0 100,100" fill={fillA} />
-              <polygon points="0,0 0,100 100,100" fill={fillB} />
-              <line x1="0" y1="0" x2="100" y2="100" />
-              {selectedA && <SelectionPoly points="0,0 100,0 100,100" />}
-              {selectedB && <SelectionPoly points="0,0 0,100 100,100" />}
-            </>
-          ) : (
-            <>
-              <polygon points="0,0 100,0 0,100" fill={fillA} />
-              <polygon points="100,0 100,100 0,100" fill={fillB} />
-              <line x1="100" y1="0" x2="0" y2="100" />
-              {selectedA && <SelectionPoly points="0,0 100,0 0,100" />}
-              {selectedB && <SelectionPoly points="100,0 100,100 0,100" />}
-            </>
-          )}
+          {diagonal === 'nwse'
+            ? nwsePolygons(
+                fillA,
+                fillB,
+                selectedA,
+                selectedB,
+                hideTop,
+                hideRight,
+                hideBottom,
+                hideLeft
+              )
+            : neswPolygons(
+                fillA,
+                fillB,
+                selectedA,
+                selectedB,
+                hideTop,
+                hideRight,
+                hideBottom,
+                hideLeft
+              )}
         </svg>
       )}
       {mergeLabel && (

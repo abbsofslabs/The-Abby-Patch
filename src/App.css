@@ -1404,7 +1404,8 @@
   cursor: pointer;
   transition: opacity 0.1s;
   touch-action: none;
-  overflow: visible;
+  /* Clip diagonal stroke so it can't bleed into a neighboring merged block. */
+  overflow: hidden;
 }
 
 .abby-patch__cell-diagonal {
@@ -1422,6 +1423,7 @@
   stroke: var(--cell-border);
   stroke-width: 1.75px;
   vector-effect: non-scaling-stroke;
+  stroke-linecap: butt;
 }
 
 .abby-patch__grid--dense .abby-patch__cell-diagonal line {
@@ -1446,6 +1448,18 @@
 
 .abby-patch__cell--merge-hide-right {
   border-right-width: 0;
+}
+
+/*
+ * When a triangle half merges into a neighbor, let the fill bleed across the
+ * shared edge so the old seam line disappears completely.
+ */
+.abby-patch__cell--diagonal.abby-patch__cell--merge-hide-top,
+.abby-patch__cell--diagonal.abby-patch__cell--merge-hide-bottom,
+.abby-patch__cell--diagonal.abby-patch__cell--merge-hide-left,
+.abby-patch__cell--diagonal.abby-patch__cell--merge-hide-right {
+  overflow: visible;
+  z-index: 3;
 }
 
 .abby-patch__cell--merge-anchor {
