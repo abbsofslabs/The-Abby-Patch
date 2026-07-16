@@ -1,6 +1,9 @@
 import { createEmptyPieceMergeIds, dissolveMergesTouchingIndices } from './mergeUtils';
 
-/** Create a 1×width strip side-state for designing a border motif. */
+/**
+ * Create a 1×width strip for a border cross-section.
+ * Index 0 = outermost ring; last index = innermost border ring.
+ */
 export function createBorderStripState(width) {
   const w = Math.max(1, Math.floor(Number(width) || 1));
   const cellCount = w;
@@ -38,7 +41,7 @@ export function resizeBorderStrip(strip, nextWidth) {
   return next;
 }
 
-/** Outer-ring cell indices (depth 1) on a rows×columns grid. */
+/** Cells within `depth` blocks of any outer edge. */
 export function getBorderCellIndices(rows, columns, depth = 1) {
   const d = Math.max(1, Math.floor(depth));
   const set = new Set();
@@ -59,9 +62,15 @@ export function getBorderCellIndices(rows, columns, depth = 1) {
   return set;
 }
 
-function readStripCell(strip, offset) {
+export function getBorderDepthFromStrips(topStrip, bottomStrip = null) {
+  const top = Math.max(1, topStrip?.columns || 1);
+  const bottom = bottomStrip ? Math.max(1, bottomStrip.columns || 1) : top;
+  return Math.max(top, bottom);
+}
+
+function readStripLayer(strip, depthIndex) {
   const width = strip.columns || strip.cellColors?.length || 1;
-  const i = ((offset % width) + width) % width;
+  const i = Math.max(0, Math.min(width - 1, depthIndex));
   return {
     color: strip.cellColors?.[i] ?? null,
     colorB: strip.cellColorsB?.[i] ?? null,
@@ -80,9 +89,9 @@ function writeCell(sideArrays, index, cell) {
 }
 
 /**
- * Stamp border motif(s) onto the outer ring of a quilt side.
- * Top edge uses topStrip; bottom uses bottomStrip (or topStrip if omitted).
- * Left/right edges use topStrip, repeating vertically.
+ * Stamp a thick border frame onto a quilt side.
+ * The strip is a depth cross-section: [0] outer edge → [n-1] toward the center.
+ * Top (and left/right) use topStrip; bottom uses bottomStrip when provided.
  */
 export function applyBorderMotifsToSide(side, rows, columns, topStrip, bottomStrip = null) {
   if (!topStrip?.cellColors?.length || rows < 1 || columns < 1) {
@@ -90,8 +99,12 @@ export function applyBorderMotifsToSide(side, rows, columns, topStrip, bottomStr
   }
 
   const bottom = bottomStrip || topStrip;
+  const topDepth = Math.max(1, topStrip.columns || 1);
+  const bottomDepth = Math.max(1, bottom.columns || 1);
+  const sideDepth = topDepth;
+  const protectDepth = Math.max(topDepth, bottomDepth);
   const cellCount = rows * columns;
-  const borderIndices = [...getBorderCellIndices(rows, columns)];
+  const borderIndices = [...getBorderCellIndices(rows, columns, protectDepth)];
   const dissolved = dissolveMergesTouchingIndices(
     side.merges || {},
     side.cellMergeIds || Array(cellCount).fill(null),
@@ -109,28 +122,44 @@ export function applyBorderMotifsToSide(side, rows, columns, topStrip, bottomStr
     merges: dissolved.merges,
     cellMergeIds: dissolved.cellMergeIds,
     pieceMergeIds: dissolved.pieceMergeIds,
-    // Applying a border locks the outer ring against paste-across.
     borderProtected: true,
+    borderDepth: protectDepth,
   };
 
-  // Top row
-  for (let col = 0; col < columns; col += 1) {
-    writeCell(next, col, readStripCell(topStrip, col));
-  }
-
-  // Bottom row
-  if (rows > 1) {
-    const rowBase = (rows - 1) * columns;
+  // Top band — full width, includes top corners (outside → inward by row).
+  for (let d = 0; d < topDepth && d < rows; d += 1) {
+    const cell = readStripLayer(topStrip, d);
     for (let col = 0; col < columns; col += 1) {
-      writeCell(next, rowBase + col, readStripCell(bottom, col));
+      writeCell(next, d * columns + col, cell);
     }
   }
 
-  // Left & right columns (skip corners already painted)
-  for (let row = 1; row < rows - 1; row += 1) {
-    writeCell(next, row * columns, readStripCell(topStrip, row));
-    if (columns > 1) {
-      writeCell(next, row * columns + (columns - 1), readStripCell(topStrip, row));
+  // Bottom band — full width, includes bottom corners.
+  for (let d = 0; d < bottomDepth && d < rows; d += 1) {
+    const row = rows - 1 - d;
+    // If top already claimed this row (small quilt), keep the nearer edge.
+    if (row < topDepth && d >= row) {
+      continue;
+    }
+    const cell = readStripLayer(bottom, d);
+    for (let col = 0; col < columns; col += 1) {
+      writeCell(next, row * columns + col, cell);
+    }
+  }
+
+  // Left & right — middle rows only (corners already filled by top/bottom).
+  const middleStart = Math.min(topDepth, rows);
+  const middleEnd = Math.max(middleStart, rows - bottomDepth);
+  for (let d = 0; d < sideDepth && d < columns; d += 1) {
+    const cell = readStripLayer(topStrip, d);
+    for (let row = middleStart; row < middleEnd; row += 1) {
+      writeCell(next, row * columns + d, cell);
+      if (columns > 1) {
+        const rightCol = columns - 1 - d;
+        if (rightCol > d) {
+          writeCell(next, row * columns + rightCol, cell);
+        }
+      }
     }
   }
 
@@ -143,10 +172,11 @@ export function applyBorderMotifsToSide(side, rows, columns, topStrip, bottomStr
  */
 export function restoreProtectedBorderCells(previousSide, tiledSide, rows, columns) {
   if (!previousSide?.borderProtected) {
-    return { ...tiledSide, borderProtected: false };
+    return { ...tiledSide, borderProtected: false, borderDepth: 0 };
   }
 
-  const protectedCells = getBorderCellIndices(rows, columns);
+  const depth = Math.max(1, previousSide.borderDepth || 1);
+  const protectedCells = getBorderCellIndices(rows, columns, depth);
   const cellCount = rows * columns;
   const next = {
     ...tiledSide,
@@ -156,6 +186,7 @@ export function restoreProtectedBorderCells(previousSide, tiledSide, rows, colum
     cellFabricIdsB: [...(tiledSide.cellFabricIdsB || Array(cellCount).fill(null))],
     cellDiagonals: [...(tiledSide.cellDiagonals || Array(cellCount).fill(null))],
     borderProtected: true,
+    borderDepth: depth,
   };
 
   protectedCells.forEach((index) => {

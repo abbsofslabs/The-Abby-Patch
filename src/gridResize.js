@@ -93,6 +93,7 @@ export function resizeSideState(side, oldRows, oldColumns, newRows, newColumns) 
     cellMergeIds: Array(cellCount).fill(null),
     pieceMergeIds: createEmptyPieceMergeIds(cellCount),
     borderProtected: Boolean(side?.borderProtected),
+    borderDepth: Math.max(0, Number(side?.borderDepth) || 0),
   };
 
   const oldCount = oldRows * oldColumns;

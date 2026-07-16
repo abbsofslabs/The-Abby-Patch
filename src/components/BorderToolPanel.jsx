@@ -2,8 +2,8 @@ import { memo, useCallback, useRef } from 'react';
 import QuiltGrid from './QuiltGrid';
 
 /**
- * Mini 1×N strip editor for border motifs.
- * Uses the parent's selected color / eraser via callbacks.
+ * Large 1×N strip editor for a border depth cross-section
+ * (outside → inside).
  */
 function BorderStripEditor({
   label,
@@ -113,29 +113,36 @@ function BorderStripEditor({
     <div className="abby-patch__border-strip">
       <h3 className="abby-patch__border-strip-title">{label}</h3>
       <p className="abby-patch__border-strip-hint">
-        Paint this {strip.columns}-block motif, then apply it to the quilt border.
-        Right-click a block to cut a diagonal.
+        Left = outer edge of the quilt, right = toward the center. Paint each
+        layer, then apply — it fills a {strip.columns}-block-wide frame all the
+        way around. Right-click a block for a diagonal cut.
       </p>
-      <div className="abby-patch__border-strip-grid">
-        <QuiltGrid
-          rows={1}
-          columns={strip.columns}
-          cellColors={strip.cellColors}
-          cellColorsB={strip.cellColorsB}
-          cellDiagonals={strip.cellDiagonals}
-          merges={strip.merges}
-          cellMergeIds={strip.cellMergeIds}
-          pieceMergeIds={strip.pieceMergeIds}
-          selectedBlocks={[]}
-          suppressRepeatHighlight
-          eraserMode={eraserMode}
-          selectionMode={false}
-          sideLabel={label}
-          onCellPointerDown={handlePointerDown}
-          onCellPointerEnter={handlePointerEnter}
-          onCellPointerUp={handlePointerUp}
-          onCellDiagonalToggle={handleDiagonalToggle}
-        />
+      <div className="abby-patch__border-strip-editor">
+        <div className="abby-patch__border-strip-labels" aria-hidden="true">
+          <span>Outside</span>
+          <span>Inside</span>
+        </div>
+        <div className="abby-patch__border-strip-grid">
+          <QuiltGrid
+            rows={1}
+            columns={strip.columns}
+            cellColors={strip.cellColors}
+            cellColorsB={strip.cellColorsB}
+            cellDiagonals={strip.cellDiagonals}
+            merges={strip.merges}
+            cellMergeIds={strip.cellMergeIds}
+            pieceMergeIds={strip.pieceMergeIds}
+            selectedBlocks={[]}
+            suppressRepeatHighlight
+            eraserMode={eraserMode}
+            selectionMode={false}
+            sideLabel={label}
+            onCellPointerDown={handlePointerDown}
+            onCellPointerEnter={handlePointerEnter}
+            onCellPointerUp={handlePointerUp}
+            onCellDiagonalToggle={handleDiagonalToggle}
+          />
+        </div>
       </div>
     </div>
   );
@@ -166,8 +173,9 @@ function BorderToolPanel({
     <section className="abby-patch__border-tool abby-patch__panel" aria-label="Border tool">
       <h2 className="abby-patch__section-title">Border tool</h2>
       <p className="abby-patch__tool-box-desc">
-        Design a short repeating strip, then stamp it around the quilt edge. Once applied,
-        paste-across leaves the border alone so your center pattern can change freely.
+        Choose how many blocks wide the border should be (for example 4), paint
+        that cross-section, then apply it as a thick frame around the quilt.
+        Once applied, paste-across leaves the border alone.
       </p>
 
       <label className="abby-patch__border-check">
@@ -176,7 +184,7 @@ function BorderToolPanel({
           checked={enabled}
           onChange={(event) => onToggleEnabled(event.target.checked)}
         />
-        Show border motif editor
+        Show border editor
       </label>
 
       {enabled && (
@@ -184,7 +192,7 @@ function BorderToolPanel({
           <div className="abby-patch__border-widths">
             <div className="abby-patch__input-group">
               <label htmlFor="border-top-width">
-                {dualBorders ? 'Top border length (blocks)' : 'Border length (blocks)'}
+                {dualBorders ? 'Top border width (blocks)' : 'Border width (blocks)'}
               </label>
               <input
                 id="border-top-width"
@@ -199,7 +207,7 @@ function BorderToolPanel({
 
             {dualBorders && (
               <div className="abby-patch__input-group">
-                <label htmlFor="border-bottom-width">Bottom border length (blocks)</label>
+                <label htmlFor="border-bottom-width">Bottom border width (blocks)</label>
                 <input
                   id="border-bottom-width"
                   type="number"
@@ -223,7 +231,11 @@ function BorderToolPanel({
           </label>
 
           <BorderStripEditor
-            label={dualBorders ? `Top (1×${topStrip.columns})` : `Border (1×${topStrip.columns})`}
+            label={
+              dualBorders
+                ? `Top border (1×${topStrip.columns} deep)`
+                : `Border (1×${topStrip.columns} deep)`
+            }
             strip={topStrip}
             selectedColor={selectedColor}
             activeFabricId={activeFabricId}
@@ -233,7 +245,7 @@ function BorderToolPanel({
 
           {dualBorders && (
             <BorderStripEditor
-              label={`Bottom (1×${bottomStrip.columns})`}
+              label={`Bottom border (1×${bottomStrip.columns} deep)`}
               strip={bottomStrip}
               selectedColor={selectedColor}
               activeFabricId={activeFabricId}
@@ -263,7 +275,8 @@ function BorderToolPanel({
           </div>
           {borderLocked && (
             <p className="abby-patch__border-locked-note">
-              Border is locked — paste across the quilt will not overwrite the outer ring.
+              Border is locked — paste across the quilt will not overwrite the
+              border frame.
             </p>
           )}
         </>

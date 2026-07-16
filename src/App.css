@@ -1511,7 +1511,7 @@
 .abby-patch__border-strip {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .abby-patch__border-strip-title {
@@ -1523,18 +1523,47 @@
 
 .abby-patch__border-strip-hint {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--brown-mid);
+  line-height: 1.35;
+}
+
+.abby-patch__border-strip-labels {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--brown-mid);
+}
+
+.abby-patch__border-strip-editor {
+  --border-strip-cell: 4.75rem;
+  width: max-content;
+  max-width: 100%;
 }
 
 .abby-patch__border-strip-grid {
   overflow-x: auto;
-  padding: 0.35rem 0;
+  padding: 0.35rem 0 0.25rem;
 }
 
 .abby-patch__border-strip-grid .abby-patch__grid {
   width: max-content;
-  max-width: 100%;
+  max-width: none;
+  max-height: none;
+  height: var(--border-strip-cell);
+  aspect-ratio: auto;
+  margin-inline: 0;
+  grid-template-columns: repeat(var(--grid-cols), var(--border-strip-cell)) !important;
+  grid-template-rows: var(--border-strip-cell) !important;
+}
+
+.abby-patch__border-strip-grid .abby-patch__cell {
+  min-width: var(--border-strip-cell);
+  min-height: var(--border-strip-cell);
 }
 
 .abby-patch__border-actions {

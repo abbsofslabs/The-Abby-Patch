@@ -2,6 +2,7 @@ import {
   applyBorderMotifsToSide,
   createBorderStripState,
   getBorderCellIndices,
+  getBorderDepthFromStrips,
   resizeBorderStrip,
   restoreProtectedBorderCells,
 } from './borderUtils';
@@ -33,7 +34,7 @@ describe('gridResize', () => {
 });
 
 describe('borderUtils', () => {
-  test('createBorderStripState builds a 1×N strip', () => {
+  test('createBorderStripState builds a 1×N depth strip', () => {
     const strip = createBorderStripState(4);
     expect(strip.columns).toBe(4);
     expect(strip.cellColors).toHaveLength(4);
@@ -47,38 +48,78 @@ describe('borderUtils', () => {
     expect(wider.cellColors).toHaveLength(4);
   });
 
-  test('getBorderCellIndices returns the outer ring', () => {
-    const cells = getBorderCellIndices(3, 3);
-    expect([...cells].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 5, 6, 7, 8]);
+  test('getBorderCellIndices returns a thick frame', () => {
+    const cells = getBorderCellIndices(4, 4, 1);
+    expect([...cells].sort((a, b) => a - b)).toEqual([
+      0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15,
+    ]);
+    expect(getBorderCellIndices(4, 4, 2).size).toBe(16);
   });
 
-  test('applyBorderMotifsToSide stamps top and bottom motifs and locks the border', () => {
+  test('getBorderDepthFromStrips uses the thicker side', () => {
+    expect(getBorderDepthFromStrips(createBorderStripState(4), createBorderStripState(3))).toBe(
+      4
+    );
+  });
+
+  test('applyBorderMotifsToSide stamps a depth frame, not a tiled edge motif', () => {
     const side = {
-      cellColors: Array(16).fill(null),
-      cellColorsB: Array(16).fill(null),
-      cellFabricIds: Array(16).fill(null),
-      cellFabricIdsB: Array(16).fill(null),
-      cellDiagonals: Array(16).fill(null),
+      cellColors: Array(36).fill(null),
+      cellColorsB: Array(36).fill(null),
+      cellFabricIds: Array(36).fill(null),
+      cellFabricIdsB: Array(36).fill(null),
+      cellDiagonals: Array(36).fill(null),
       merges: {},
-      cellMergeIds: Array(16).fill(null),
-      pieceMergeIds: Array.from({ length: 16 }, () => ({ a: null, b: null })),
+      cellMergeIds: Array(36).fill(null),
+      pieceMergeIds: Array.from({ length: 36 }, () => ({ a: null, b: null })),
     };
-    const top = createBorderStripState(4);
-    top.cellColors = ['#111111', '#222222', '#333333', '#444444'];
-    const bottom = createBorderStripState(3);
-    bottom.cellColors = ['#aaaaaa', '#bbbbbb', '#cccccc'];
+    // 6×6 quilt, 2-block-wide border: outer = #111, inner = #222
+    const top = createBorderStripState(2);
+    top.cellColors = ['#111111', '#222222'];
 
-    const next = applyBorderMotifsToSide(side, 4, 4, top, bottom);
+    const next = applyBorderMotifsToSide(side, 6, 6, top);
     expect(next.borderProtected).toBe(true);
+    expect(next.borderDepth).toBe(2);
+
+    // Outer ring all #111
     expect(next.cellColors[0]).toBe('#111111');
-    expect(next.cellColors[1]).toBe('#222222');
-    expect(next.cellColors[12]).toBe('#aaaaaa'); // bottom-left
-    expect(next.cellColors[15]).toBe('#aaaaaa'); // 15 % 3 === 0 → first bottom color
+    expect(next.cellColors[5]).toBe('#111111');
+    expect(next.cellColors[30]).toBe('#111111');
+    // Second ring #222
+    expect(next.cellColors[7]).toBe('#222222'); // row1 col1
+    expect(next.cellColors[8]).toBe('#222222');
+    // Center untouched
+    expect(next.cellColors[14]).toBe(null); // row2 col2
+    expect(next.cellColors[21]).toBe(null); // row3 col3
   });
 
-  test('restoreProtectedBorderCells keeps the outer ring after a paste', () => {
+  test('applyBorderMotifsToSide supports different top and bottom depths', () => {
+    const side = {
+      cellColors: Array(36).fill(null),
+      cellColorsB: Array(36).fill(null),
+      cellFabricIds: Array(36).fill(null),
+      cellFabricIdsB: Array(36).fill(null),
+      cellDiagonals: Array(36).fill(null),
+      merges: {},
+      cellMergeIds: Array(36).fill(null),
+      pieceMergeIds: Array.from({ length: 36 }, () => ({ a: null, b: null })),
+    };
+    const top = createBorderStripState(2);
+    top.cellColors = ['#111111', '#222222'];
+    const bottom = createBorderStripState(1);
+    bottom.cellColors = ['#aaaaaa'];
+
+    const next = applyBorderMotifsToSide(side, 6, 6, top, bottom);
+    expect(next.borderDepth).toBe(2);
+    expect(next.cellColors[0]).toBe('#111111');
+    expect(next.cellColors[30]).toBe('#aaaaaa'); // bottom outer row
+    expect(next.cellColors[24]).toBe('#111111'); // left side still uses top depth
+  });
+
+  test('restoreProtectedBorderCells keeps the thick frame after a paste', () => {
     const previous = {
       borderProtected: true,
+      borderDepth: 1,
       cellColors: Array(9).fill('#border'),
       cellColorsB: Array(9).fill(null),
       cellFabricIds: Array(9).fill(null),
@@ -102,5 +143,6 @@ describe('borderUtils', () => {
     expect(restored.cellColors[0]).toBe('#border');
     expect(restored.cellColors[4]).toBe('#tiled');
     expect(restored.borderProtected).toBe(true);
+    expect(restored.borderDepth).toBe(1);
   });
 });

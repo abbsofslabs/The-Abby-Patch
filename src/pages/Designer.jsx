@@ -85,6 +85,7 @@ function createSideState(rows, columns) {
     cellMergeIds: Array(cellCount).fill(null),
     pieceMergeIds: createEmptyPieceMergeIds(cellCount),
     borderProtected: false,
+    borderDepth: 0,
   };
 }
 
@@ -130,6 +131,7 @@ function normalizeSideState(side, rows, columns) {
     cellMergeIds,
     pieceMergeIds,
     borderProtected: Boolean(side?.borderProtected),
+    borderDepth: Math.max(0, Number(side?.borderDepth) || 0),
   };
 }
 
@@ -501,7 +503,11 @@ function Designer() {
   const handleUnlockBorder = useCallback(() => {
     setSides((prev) => ({
       ...prev,
-      [activeSide]: { ...prev[activeSide], borderProtected: false },
+      [activeSide]: {
+        ...prev[activeSide],
+        borderProtected: false,
+        borderDepth: 0,
+      },
     }));
   }, [activeSide]);
 
