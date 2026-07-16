@@ -8,6 +8,7 @@ import PaywallModal from '../components/PaywallModal';
 import PdfCaptureGrids from '../components/PdfCaptureGrids';
 import PaletteSwatch from '../components/PaletteSwatch';
 import QuiltGrid from '../components/QuiltGrid';
+import SavedDesignsPanel from '../components/SavedDesignsPanel';
 import StoreFabricBrowser from '../components/StoreFabricBrowser';
 import YardagePanel from '../components/YardagePanel';
 import { useAuth } from '../context/AuthContext';
@@ -42,6 +43,11 @@ import {
   formatDimension,
 } from '../yardageCalculator';
 import { buildFabricPricingReport } from '../utils/fabricPricing';
+import { designHasColoredBlocks } from '../utils/designPayload';
+import {
+  createSavedDesign,
+  updateSavedDesign,
+} from '../utils/supabase/designs';
 import { nextDiagonal } from '../triangleUtils';
 import {
   getUserEmail,
@@ -119,6 +125,11 @@ function normalizeSideState(side, rows, columns) {
 
 function Designer() {
   const { user, signOut } = useAuth();
+  const [workspaceTab, setWorkspaceTab] = useState('design');
+  const [savedDesignId, setSavedDesignId] = useState(null);
+  const [savedDesignName, setSavedDesignName] = useState('');
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveNotice, setSaveNotice] = useState('');
   const [grid, setGrid] = useState(null);
   const [activeSide, setActiveSide] = useState('front');
   const [sides, setSides] = useState({
@@ -255,6 +266,9 @@ function Designer() {
     setEraserMode(false);
     setSelectionMode(false);
     setHasDownloadedDesign(false);
+    setSavedDesignId(null);
+    setSavedDesignName('');
+    setSaveNotice('');
   }, [quiltWidth, quiltHeight, blockSize]);
 
   const handleCopyPattern = useCallback(() => {
@@ -266,7 +280,13 @@ function Designer() {
       side.merges,
       side.cellMergeIds,
       grid.columns,
-      selectedPiecesToCellIndices(side.selectedBlocks)
+      selectedPiecesToCellIndices(side.selectedBlocks),
+      {
+        cellColorsB: side.cellColorsB,
+        cellDiagonals: side.cellDiagonals,
+        cellFabricIds: side.cellFabricIds,
+        cellFabricIdsB: side.cellFabricIdsB,
+      }
     );
 
     if (snapshot.error === 'no_selection') {
@@ -301,7 +321,13 @@ function Designer() {
           grid.columns,
           currentSide.selectedBlocks
             ? selectedPiecesToCellIndices(currentSide.selectedBlocks)
-            : []
+            : [],
+          {
+            cellColorsB: currentSide.cellColorsB,
+            cellDiagonals: currentSide.cellDiagonals,
+            cellFabricIds: currentSide.cellFabricIds,
+            cellFabricIdsB: currentSide.cellFabricIdsB,
+          }
         );
 
       if (snapshot.error === 'no_selection') {
@@ -321,22 +347,19 @@ function Designer() {
         snapshot
       );
 
-      const cellCount = grid.rows * grid.columns;
-
       return {
         ...prev,
         [activeSide]: {
           ...currentSide,
           cellColors: result.cellColors,
-          // The snapshot only carries base colors + full-cell merges, so the
-          // pasted side drops diagonal cuts to stay consistent.
-          cellColorsB: Array(cellCount).fill(null),
-          cellFabricIdsB: Array(cellCount).fill(null),
-          cellDiagonals: Array(cellCount).fill(null),
+          cellColorsB: result.cellColorsB,
+          cellDiagonals: result.cellDiagonals,
+          cellFabricIds: result.cellFabricIds,
+          cellFabricIdsB: result.cellFabricIdsB,
           merges: result.merges,
           cellMergeIds: result.cellMergeIds,
           pieceMergeIds:
-            result.pieceMergeIds ?? createEmptyPieceMergeIds(cellCount),
+            result.pieceMergeIds ?? createEmptyPieceMergeIds(grid.rows * grid.columns),
           selectedBlocks: [],
         },
       };
@@ -1218,6 +1241,153 @@ function Designer() {
     boltWidth,
   ]);
 
+  const applyDesignPayload = useCallback((payload, { designId = null, designName = '' } = {}) => {
+    if (!payload?.grid || !payload?.sides) {
+      return false;
+    }
+
+    const rows = payload.grid.rows;
+    const columns = payload.grid.columns;
+    setGrid(payload.grid);
+    setSides({
+      front: normalizeSideState(payload.sides.front, rows, columns),
+      back: normalizeSideState(payload.sides.back, rows, columns),
+    });
+    setQuiltWidth(payload.quiltWidth ?? payload.grid.finishedWidth ?? 60);
+    setQuiltHeight(payload.quiltHeight ?? payload.grid.finishedHeight ?? 80);
+    setBlockSize(payload.blockSize ?? payload.grid.blockSize ?? 6);
+    setQuiltSizePreset(payload.quiltSizePreset ?? 'custom');
+    setActiveSide(payload.activeSide === 'back' ? 'back' : 'front');
+    setBoltWidth(Number(payload.boltWidth) || DEFAULT_BOLT_WIDTH);
+    if (payload.seamAllowance != null) {
+      setSeamAllowance(payload.seamAllowance);
+    }
+    setFabricCatalog(payload.fabricCatalog && typeof payload.fabricCatalog === 'object'
+      ? payload.fabricCatalog
+      : {});
+    setEraserMode(false);
+    setSelectionMode(false);
+    setHasDownloadedDesign(false);
+    setSavedDesignId(designId);
+    setSavedDesignName(designName || '');
+    setSaveNotice('');
+    return true;
+  }, []);
+
+  const getDesignState = useCallback(
+    () => ({
+      grid,
+      sides,
+      quiltWidth,
+      quiltHeight,
+      blockSize,
+      quiltSizePreset,
+      activeSide,
+      boltWidth,
+      seamAllowance: Number(seamAllowance) || DEFAULT_SEAM_ALLOWANCE,
+      fabricCatalog,
+    }),
+    [
+      grid,
+      sides,
+      quiltWidth,
+      quiltHeight,
+      blockSize,
+      quiltSizePreset,
+      activeSide,
+      boltWidth,
+      seamAllowance,
+      fabricCatalog,
+    ]
+  );
+
+  const canSaveDesign = Boolean(grid && designHasColoredBlocks({ sides }));
+
+  const handleSaveDesign = useCallback(
+    async ({ asNew = false } = {}) => {
+      if (!user?.id) {
+        window.alert('Sign in to save patterns to your account.');
+        return;
+      }
+      if (!canSaveDesign) {
+        window.alert('Color at least one block before saving.');
+        return;
+      }
+
+      let name = savedDesignName;
+      if (asNew || !savedDesignId || !name) {
+        const suggested =
+          name ||
+          (grid
+            ? `${formatDimension(grid.finishedWidth)}×${formatDimension(grid.finishedHeight)} quilt`
+            : 'Untitled quilt');
+        const entered = window.prompt(
+          asNew || !savedDesignId ? 'Name this pattern' : 'Pattern name',
+          suggested
+        );
+        if (entered == null) {
+          return;
+        }
+        name = entered.trim() || suggested;
+      }
+
+      setSaveBusy(true);
+      setSaveNotice('');
+      try {
+        const designState = getDesignState();
+        if (savedDesignId && !asNew) {
+          const updated = await updateSavedDesign({
+            designId: savedDesignId,
+            name,
+            designState,
+          });
+          setSavedDesignId(updated.id);
+          setSavedDesignName(updated.name);
+          setSaveNotice(`Saved “${updated.name}”.`);
+        } else {
+          const created = await createSavedDesign({
+            userId: user.id,
+            name,
+            designState,
+          });
+          setSavedDesignId(created.id);
+          setSavedDesignName(created.name);
+          setSaveNotice(`Saved “${created.name}” to My patterns.`);
+        }
+      } catch (saveError) {
+        console.error(saveError);
+        window.alert(saveError.message || 'Unable to save pattern. Check that saved_designs exists in Supabase.');
+      } finally {
+        setSaveBusy(false);
+      }
+    },
+    [user, canSaveDesign, savedDesignName, savedDesignId, grid, getDesignState]
+  );
+
+  const handleOpenSavedDesign = useCallback(
+    (design) => {
+      const ok = applyDesignPayload(design.payload, {
+        designId: design.id,
+        designName: design.name,
+      });
+      if (!ok) {
+        window.alert('That saved pattern could not be opened.');
+        return;
+      }
+      setWorkspaceTab('design');
+      setSaveNotice(`Opened “${design.name}”.`);
+    },
+    [applyDesignPayload]
+  );
+
+  const handleSavedDesignDeleted = useCallback((designId) => {
+    if (designId === savedDesignId) {
+      setSavedDesignId(null);
+      setSavedDesignName('');
+      setSaveNotice('');
+    }
+  }, [savedDesignId]);
+
   executePdfDownloadRef.current = executePdfDownload;
 
   useEffect(() => {
@@ -1232,24 +1402,12 @@ function Designer() {
 
     const restored = loadAndClearPatternSession();
     if (restored) {
-      setGrid(restored.grid);
-      setSides({
-        front: normalizeSideState(restored.sides.front, restored.grid.rows, restored.grid.columns),
-        back: normalizeSideState(restored.sides.back, restored.grid.rows, restored.grid.columns),
-      });
-      setQuiltWidth(restored.quiltWidth);
-      setQuiltHeight(restored.quiltHeight);
-      setBlockSize(restored.blockSize ?? restored.grid?.blockSize ?? 6);
-      setQuiltSizePreset(restored.quiltSizePreset);
-      setActiveSide(restored.activeSide);
-      if (restored.boltWidth) {
-        setBoltWidth(Number(restored.boltWidth) || DEFAULT_BOLT_WIDTH);
-      }
+      applyDesignPayload(restored);
     }
 
     window.history.replaceState({}, '', window.location.pathname);
     setPendingPdfDownload(true);
-  }, []);
+  }, [applyDesignPayload]);
 
   useEffect(() => {
     if (!pendingPdfDownload || !grid || !yardageReport?.colors?.length) {
@@ -1305,23 +1463,14 @@ function Designer() {
 
     setCheckoutLoading(true);
     try {
-      savePatternSession({
-        grid,
-        sides,
-        quiltWidth,
-        quiltHeight,
-        blockSize,
-        quiltSizePreset,
-        activeSide,
-        boltWidth,
-      });
+      savePatternSession(getDesignState());
       await startStripeCheckout({ mode, email: trimmedEmail });
     } catch (error) {
       console.error('Checkout failed:', error);
       window.alert(error.message || 'Unable to start checkout. Please try again.');
       setCheckoutLoading(false);
     }
-  }, [grid, sides, quiltWidth, quiltHeight, blockSize, quiltSizePreset, activeSide, boltWidth]);
+  }, [getDesignState]);
 
   const handlePaySingle = useCallback(
     (email) => {
@@ -1353,6 +1502,36 @@ function Designer() {
           </div>
         </header>
 
+        <div className="abby-patch__workspace-tabs" role="tablist" aria-label="Customer workspace">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={workspaceTab === 'design'}
+            className={`abby-patch__tab ${workspaceTab === 'design' ? 'abby-patch__tab--active' : ''}`}
+            onClick={() => setWorkspaceTab('design')}
+          >
+            Design
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={workspaceTab === 'saved'}
+            className={`abby-patch__tab ${workspaceTab === 'saved' ? 'abby-patch__tab--active' : ''}`}
+            onClick={() => setWorkspaceTab('saved')}
+          >
+            My patterns
+          </button>
+        </div>
+
+        {workspaceTab === 'saved' ? (
+          <SavedDesignsPanel
+            userId={user?.id}
+            activeDesignId={savedDesignId}
+            onOpenDesign={handleOpenSavedDesign}
+            onDesignDeleted={handleSavedDesignDeleted}
+          />
+        ) : (
+          <>
         <section className="abby-patch__controls abby-patch__panel">
           <div className="abby-patch__setup">
             <div className="abby-patch__input-group abby-patch__input-group--full">
@@ -1455,6 +1634,44 @@ function Designer() {
                 inches based on {grid.columns}&times;{grid.rows} blocks.
               </p>
             )}
+
+            <div className="abby-patch__save-row">
+              <button
+                type="button"
+                className="abby-patch__button"
+                onClick={() => handleSaveDesign({ asNew: false })}
+                disabled={!canSaveDesign || saveBusy}
+              >
+                {saveBusy
+                  ? 'Saving…'
+                  : savedDesignId
+                    ? 'Update saved pattern'
+                    : 'Save pattern'}
+              </button>
+              {savedDesignId && (
+                <button
+                  type="button"
+                  className="abby-patch__tool-button"
+                  onClick={() => handleSaveDesign({ asNew: true })}
+                  disabled={!canSaveDesign || saveBusy}
+                >
+                  Save as new
+                </button>
+              )}
+              <button
+                type="button"
+                className="abby-patch__tool-button"
+                onClick={() => setWorkspaceTab('saved')}
+              >
+                My patterns
+              </button>
+            </div>
+            {savedDesignName && (
+              <p className="abby-patch__save-status">
+                Editing saved pattern: <strong>{savedDesignName}</strong>
+              </p>
+            )}
+            {saveNotice && <p className="abby-patch__save-status">{saveNotice}</p>}
           </div>
         </section>
 
@@ -1642,8 +1859,8 @@ function Designer() {
                   <p className="abby-patch__tool-box-desc">
                     Merge joins same-color shapes that touch — whole blocks or triangle
                     halves. Whole-block merges must form a rectangle; triangle merges can
-                    be any connected shape. Copy and paste tile a selected motif across
-                    the quilt.
+                    be any connected shape. Copy and paste tiles colors, diagonals, and
+                    merges across the quilt.
                   </p>
                   <div className="abby-patch__tool-box-controls">
                     <button
@@ -1757,6 +1974,8 @@ function Designer() {
             </div>
             </>
           )}
+          </>
+        )}
       </div>
       {PAYWALL_ENABLED && accessModal === 'free' && (
         <FreePatternModal

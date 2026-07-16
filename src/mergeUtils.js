@@ -711,40 +711,37 @@ export function getMergeBorders(
   };
 }
 
+/**
+ * Tile pattern-relative merges across the full grid.
+ * Merge minRow/minCol and piece/cell indices are relative to the pattern
+ * (piece index = row * patternWidth + col).
+ */
 export function tileMergesFromSelection(
   merges,
   rows,
   columns,
-  minRow,
-  minCol,
+  anchorRow,
+  anchorCol,
   patternWidth,
   patternHeight
 ) {
-  const patternMerges = Object.values(merges).filter(
-    (merge) =>
-      merge.minRow >= minRow &&
-      merge.minRow + merge.height <= minRow + patternHeight &&
-      merge.minCol >= minCol &&
-      merge.minCol + merge.width <= minCol + patternWidth
-  );
-
   const cellCount = rows * columns;
   const nextPieceMergeIds = createEmptyPieceMergeIds(cellCount);
   const nextMerges = {};
   let nextId = 1;
 
-  patternMerges.forEach((merge) => {
-    const relMinRow = merge.minRow - minRow;
-    const relMinCol = merge.minCol - minCol;
+  Object.values(merges).forEach((merge) => {
+    const relMinRow = merge.minRow;
+    const relMinCol = merge.minCol;
 
     for (let row = 0; row < rows; row += 1) {
-      const rowOffset = ((row - minRow) % patternHeight + patternHeight) % patternHeight;
+      const rowOffset = ((row - anchorRow) % patternHeight + patternHeight) % patternHeight;
       if (rowOffset !== relMinRow) {
         continue;
       }
 
       for (let col = 0; col < columns; col += 1) {
-        const colOffset = ((col - minCol) % patternWidth + patternWidth) % patternWidth;
+        const colOffset = ((col - anchorCol) % patternWidth + patternWidth) % patternWidth;
         if (colOffset !== relMinCol) {
           continue;
         }
@@ -758,7 +755,8 @@ export function tileMergesFromSelection(
           (merge.cells || []).map((cellIndex) => ({ index: cellIndex, half: null }));
 
         const resolvedPieces = sourcePieces.map((piece) => {
-          const { row: pieceRow, col: pieceCol } = indexToRowCol(piece.index, columns);
+          const pieceRow = Math.floor(piece.index / patternWidth);
+          const pieceCol = piece.index % patternWidth;
           const relRow = pieceRow - merge.minRow;
           const relCol = pieceCol - merge.minCol;
           return {

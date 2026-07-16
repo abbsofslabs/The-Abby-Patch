@@ -8,7 +8,7 @@ import {
   removeBlockSelections,
   selectedPiecesToCellIndices,
 } from './gridUtils';
-import { mergeSelectedBlocks } from './mergeUtils';
+import { mergePieces, mergeSelectedBlocks, createEmptyPieceMergeIds } from './mergeUtils';
 
 test('tiles the selected pattern across the entire grid', () => {
   const rows = 4;
@@ -92,42 +92,91 @@ test('returns an error when the selected pattern has no color', () => {
   expect(error).toBe('no_motif');
 });
 
-test('pattern snapshot skips triangle-half merges and keeps full-cell merges', () => {
+test('pattern snapshot keeps full-cell and triangle-half merges', () => {
   const cellColors = Array(16).fill('#123456');
+  const cellColorsB = Array(16).fill(null);
+  const cellDiagonals = Array(16).fill(null);
+  cellColorsB[0] = '#abcdef';
+  cellDiagonals[0] = 'nwse';
 
   const fullMerge = mergeSelectedBlocks(cellColors, [4, 5], 4, {}, Array(16).fill(null));
-
-  // Hand-built legacy half merge — the UI can no longer create these, but old
-  // saved sessions may still contain them.
-  const merges = {
-    ...fullMerge.merges,
-    99: {
-      id: 99,
-      color: '#123456',
-      minRow: 0,
-      minCol: 0,
-      width: 2,
-      height: 1,
-      cells: [0, 1],
-      pieces: [
-        { index: 0, half: 'a' },
-        { index: 1, half: null },
-      ],
-    },
-  };
+  const halfMerge = mergePieces(
+    [
+      { index: 0, half: 'a' },
+      { index: 1, half: null },
+    ],
+    cellColors,
+    cellColorsB,
+    cellDiagonals,
+    4,
+    4,
+    fullMerge.merges,
+    fullMerge.pieceMergeIds
+  );
 
   const snapshot = extractPatternSnapshot(
     cellColors,
-    merges,
-    fullMerge.cellMergeIds,
+    halfMerge.merges,
+    halfMerge.cellMergeIds,
     4,
-    [0, 1, 4, 5]
+    [0, 1, 4, 5],
+    { cellColorsB, cellDiagonals }
   );
 
   expect(snapshot.error).toBeNull();
+  expect(snapshot.patternDiagonals[0]).toBe('nwse');
+  expect(snapshot.patternB[0]).toBe('#abcdef');
   const copied = Object.values(snapshot.merges);
-  expect(copied).toHaveLength(1);
-  expect(copied[0].cells).toEqual([2, 3]);
+  expect(copied).toHaveLength(2);
+  expect(copied.some((merge) => merge.pieces?.some((piece) => piece.half === 'a'))).toBe(
+    true
+  );
+});
+
+test('paste tiles triangles and triangle-half merges across the grid', () => {
+  const cellColors = Array(16).fill(null);
+  const cellColorsB = Array(16).fill(null);
+  const cellDiagonals = Array(16).fill(null);
+  cellColors[0] = '#aa0000';
+  cellColorsB[0] = '#00aa00';
+  cellDiagonals[0] = 'nwse';
+  cellColors[1] = '#aa0000';
+
+  const merged = mergePieces(
+    [
+      { index: 0, half: 'a' },
+      { index: 1, half: null },
+    ],
+    cellColors,
+    cellColorsB,
+    cellDiagonals,
+    4,
+    4,
+    {},
+    createEmptyPieceMergeIds(16)
+  );
+
+  const result = applyTileFromSelection(
+    cellColors,
+    merged.merges,
+    merged.cellMergeIds,
+    4,
+    4,
+    [0, 1, 4, 5],
+    { cellColorsB, cellDiagonals }
+  );
+
+  expect(result.error).toBeNull();
+  expect(result.cellDiagonals[0]).toBe('nwse');
+  expect(result.cellDiagonals[2]).toBe('nwse');
+  expect(result.cellDiagonals[8]).toBe('nwse');
+  expect(result.cellColorsB[0]).toBe('#00aa00');
+  expect(result.cellColorsB[2]).toBe('#00aa00');
+  // Triangle half A stays merged with the neighboring square in every tile.
+  expect(result.pieceMergeIds[0].a).toBe(result.pieceMergeIds[1].a);
+  expect(result.pieceMergeIds[0].b).toBeNull();
+  expect(result.pieceMergeIds[2].a).toBe(result.pieceMergeIds[3].a);
+  expect(result.pieceMergeIds[8].a).toBe(result.pieceMergeIds[9].a);
 });
 
 test('applyTileFromSelection returns pieceMergeIds for pasted merges', () => {

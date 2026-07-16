@@ -29,12 +29,24 @@ export function getSelectionBounds(indices, columns) {
   };
 }
 
+function toPatternIndex(index, columns, minRow, minCol, patternWidth) {
+  const row = Math.floor(index / columns) - minRow;
+  const col = (index % columns) - minCol;
+  return row * patternWidth + col;
+}
+
+/**
+ * Capture the selected motif for copy/paste tiling.
+ * Options may include cellColorsB, cellDiagonals, cellFabricIds, cellFabricIdsB
+ * so triangles and store fabrics survive the round-trip.
+ */
 export function extractPatternSnapshot(
   cellColors,
   merges,
   cellMergeIds,
   columns,
-  selectedIndices
+  selectedIndices,
+  options = {}
 ) {
   if (!selectedIndices.length) {
     return { error: 'no_selection' };
@@ -45,6 +57,13 @@ export function extractPatternSnapshot(
     return { error: 'no_selection' };
   }
 
+  const {
+    cellColorsB = null,
+    cellDiagonals = null,
+    cellFabricIds = null,
+    cellFabricIdsB = null,
+  } = options;
+
   const { minRow, minCol, width, height } = bounds;
   const pattern = Array.from({ length: height * width }, (_, i) => {
     const rowOffset = Math.floor(i / width);
@@ -53,7 +72,47 @@ export function extractPatternSnapshot(
     return cellColors[index] ?? null;
   });
 
-  if (!pattern.some((color) => color != null)) {
+  const patternB = cellColorsB
+    ? Array.from({ length: height * width }, (_, i) => {
+        const rowOffset = Math.floor(i / width);
+        const colOffset = i % width;
+        const index = (minRow + rowOffset) * columns + (minCol + colOffset);
+        return cellColorsB[index] ?? null;
+      })
+    : null;
+
+  const patternDiagonals = cellDiagonals
+    ? Array.from({ length: height * width }, (_, i) => {
+        const rowOffset = Math.floor(i / width);
+        const colOffset = i % width;
+        const index = (minRow + rowOffset) * columns + (minCol + colOffset);
+        return cellDiagonals[index] ?? null;
+      })
+    : null;
+
+  const patternFabricIds = cellFabricIds
+    ? Array.from({ length: height * width }, (_, i) => {
+        const rowOffset = Math.floor(i / width);
+        const colOffset = i % width;
+        const index = (minRow + rowOffset) * columns + (minCol + colOffset);
+        return cellFabricIds[index] ?? null;
+      })
+    : null;
+
+  const patternFabricIdsB = cellFabricIdsB
+    ? Array.from({ length: height * width }, (_, i) => {
+        const rowOffset = Math.floor(i / width);
+        const colOffset = i % width;
+        const index = (minRow + rowOffset) * columns + (minCol + colOffset);
+        return cellFabricIdsB[index] ?? null;
+      })
+    : null;
+
+  const hasColor =
+    pattern.some((color) => color != null) ||
+    (patternB || []).some((color) => color != null);
+
+  if (!hasColor) {
     return { error: 'no_motif' };
   }
 
@@ -61,38 +120,49 @@ export function extractPatternSnapshot(
   const patternCellMergeIds = Array(height * width).fill(null);
 
   Object.values(merges).forEach((merge) => {
-    // Only full-cell merges tile cleanly; triangle-half merges stay behind.
-    const hasHalfPieces = merge.pieces?.some((piece) => piece.half != null);
     if (
-      !hasHalfPieces &&
-      merge.minRow >= minRow &&
-      merge.minRow + merge.height <= minRow + height &&
-      merge.minCol >= minCol &&
-      merge.minCol + merge.width <= minCol + width
+      merge.minRow < minRow ||
+      merge.minRow + merge.height > minRow + height ||
+      merge.minCol < minCol ||
+      merge.minCol + merge.width > minCol + width
     ) {
-      const relMinRow = merge.minRow - minRow;
-      const relMinCol = merge.minCol - minCol;
-      patternMerges[merge.id] = {
-        ...merge,
-        pieces: null,
-        minRow: relMinRow,
-        minCol: relMinCol,
-        cells: merge.cells.map((index) => {
-          const row = Math.floor(index / columns) - minRow;
-          const col = (index % columns) - minCol;
-          return row * width + col;
-        }),
-      };
-      merge.cells.forEach((index) => {
-        const row = Math.floor(index / columns) - minRow;
-        const col = (index % columns) - minCol;
-        patternCellMergeIds[row * width + col] = merge.id;
-      });
+      return;
     }
+
+    const relMinRow = merge.minRow - minRow;
+    const relMinCol = merge.minCol - minCol;
+    const sourcePieces =
+      merge.pieces ||
+      (merge.cells || []).map((cellIndex) => ({ index: cellIndex, half: null }));
+
+    const cells = (merge.cells || sourcePieces.map((piece) => piece.index)).map((index) =>
+      toPatternIndex(index, columns, minRow, minCol, width)
+    );
+
+    const pieces = sourcePieces.map((piece) => ({
+      index: toPatternIndex(piece.index, columns, minRow, minCol, width),
+      half: piece.half ?? null,
+    }));
+
+    patternMerges[merge.id] = {
+      ...merge,
+      minRow: relMinRow,
+      minCol: relMinCol,
+      cells,
+      pieces,
+    };
+
+    cells.forEach((patternIndex) => {
+      patternCellMergeIds[patternIndex] = merge.id;
+    });
   });
 
   return {
     pattern,
+    patternB,
+    patternDiagonals,
+    patternFabricIds,
+    patternFabricIdsB,
     merges: patternMerges,
     cellMergeIds: patternCellMergeIds,
     width,
@@ -103,25 +173,63 @@ export function extractPatternSnapshot(
   };
 }
 
+function tilePatternField(patternField, rows, columns, width, height, anchorRow, anchorCol) {
+  if (!patternField) {
+    return Array(rows * columns).fill(null);
+  }
+
+  return Array.from({ length: rows * columns }, (_, index) => {
+    const row = Math.floor(index / columns);
+    const col = index % columns;
+    const rowOffset = ((row - anchorRow) % height + height) % height;
+    const colOffset = ((col - anchorCol) % width + width) % width;
+    return patternField[rowOffset * width + colOffset] ?? null;
+  });
+}
+
 export function applyPatternSnapshot(cellColors, rows, columns, snapshot) {
   const {
     pattern,
+    patternB = null,
+    patternDiagonals = null,
+    patternFabricIds = null,
+    patternFabricIdsB = null,
     merges: patternMerges,
     width,
     height,
     anchorRow = 0,
     anchorCol = 0,
   } = snapshot;
-  const next = [...cellColors];
 
-  for (let index = 0; index < rows * columns; index += 1) {
-    const row = Math.floor(index / columns);
-    const col = index % columns;
-    const rowOffset = ((row - anchorRow) % height + height) % height;
-    const colOffset = ((col - anchorCol) % width + width) % width;
-    const patternIndex = rowOffset * width + colOffset;
-    next[index] = pattern[patternIndex];
-  }
+  const next = tilePatternField(pattern, rows, columns, width, height, anchorRow, anchorCol);
+  const nextB = tilePatternField(patternB, rows, columns, width, height, anchorRow, anchorCol);
+  const nextDiagonals = tilePatternField(
+    patternDiagonals,
+    rows,
+    columns,
+    width,
+    height,
+    anchorRow,
+    anchorCol
+  );
+  const nextFabricIds = tilePatternField(
+    patternFabricIds,
+    rows,
+    columns,
+    width,
+    height,
+    anchorRow,
+    anchorCol
+  );
+  const nextFabricIdsB = tilePatternField(
+    patternFabricIdsB,
+    rows,
+    columns,
+    width,
+    height,
+    anchorRow,
+    anchorCol
+  );
 
   const tiledMerges = tileMergesFromSelection(
     patternMerges,
@@ -135,6 +243,10 @@ export function applyPatternSnapshot(cellColors, rows, columns, snapshot) {
 
   return {
     cellColors: next,
+    cellColorsB: nextB,
+    cellDiagonals: nextDiagonals,
+    cellFabricIds: nextFabricIds,
+    cellFabricIdsB: nextFabricIdsB,
     merges: tiledMerges.merges,
     cellMergeIds: tiledMerges.cellMergeIds,
     pieceMergeIds: tiledMerges.pieceMergeIds,
@@ -148,18 +260,27 @@ export function applyTileFromSelection(
   cellMergeIds,
   rows,
   columns,
-  selectedIndices
+  selectedIndices,
+  options = {}
 ) {
   const snapshot = extractPatternSnapshot(
     cellColors,
     merges,
     cellMergeIds,
     columns,
-    selectedIndices
+    selectedIndices,
+    options
   );
 
   if (snapshot.error) {
-    return { cellColors, merges, cellMergeIds, error: snapshot.error };
+    return {
+      cellColors,
+      cellColorsB: options.cellColorsB,
+      cellDiagonals: options.cellDiagonals,
+      merges,
+      cellMergeIds,
+      error: snapshot.error,
+    };
   }
 
   return applyPatternSnapshot(cellColors, rows, columns, snapshot);
