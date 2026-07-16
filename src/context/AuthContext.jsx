@@ -10,8 +10,13 @@ import { createClient, isSupabaseConfigured } from '../utils/supabase/client';
 import { ensureProfile, fetchProfile } from '../utils/supabase/profiles';
 
 function getAuthRedirectUrl() {
-  const base = process.env.PUBLIC_URL || '';
-  const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base;
+  const publicUrl = process.env.PUBLIC_URL || '';
+  const normalizedBase =
+    !publicUrl || publicUrl === '.'
+      ? ''
+      : publicUrl.endsWith('/')
+        ? publicUrl.slice(0, -1)
+        : publicUrl;
   return `${window.location.origin}${normalizedBase}/auth`;
 }
 

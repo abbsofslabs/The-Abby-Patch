@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { HexColorPicker } from 'react-colorful';
 import logo from '../assets/abby-patch-logo.png';
+import BorderToolPanel from '../components/BorderToolPanel';
 import FreePatternModal from '../components/FreePatternModal';
 import FloralDecorations from '../components/FloralDecorations';
 import PaywallModal from '../components/PaywallModal';
@@ -14,6 +15,13 @@ import YardagePanel from '../components/YardagePanel';
 import { useAuth } from '../context/AuthContext';
 import { CREAM, FABRIC_PALETTE, PAYWALL_ENABLED, QUILT_SIZE_PRESETS, SIDES } from '../constants';
 import { generateQuiltPdf } from '../generateQuiltPdf';
+import {
+  applyBorderMotifsToSide,
+  createBorderStripState,
+  resizeBorderStrip,
+  restoreProtectedBorderCells,
+} from '../borderUtils';
+import { resizeSideState } from '../gridResize';
 import {
   addPieceSelections,
   applyPatternSnapshot,
@@ -59,7 +67,7 @@ import {
 } from '../utils/accessStorage';
 import { startStripeCheckout } from '../utils/stripeCheckout';
 import { loadAndClearPatternSession, savePatternSession } from '../utils/patternSession';
-import { openScreenColorPickerWindow, subscribeToScreenColorPicker } from '../utils/screenColorPicker';
+import { pickScreenColor, subscribeToScreenColorPicker } from '../utils/screenColorPicker';
 import '../App.css';
 
 function createSideState(rows, columns) {
@@ -76,6 +84,7 @@ function createSideState(rows, columns) {
     merges: {},
     cellMergeIds: Array(cellCount).fill(null),
     pieceMergeIds: createEmptyPieceMergeIds(cellCount),
+    borderProtected: false,
   };
 }
 
@@ -120,6 +129,7 @@ function normalizeSideState(side, rows, columns) {
     merges: side?.merges ?? {},
     cellMergeIds,
     pieceMergeIds,
+    borderProtected: Boolean(side?.borderProtected),
   };
 }
 
@@ -130,6 +140,12 @@ function Designer() {
   const [savedDesignName, setSavedDesignName] = useState('');
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveNotice, setSaveNotice] = useState('');
+  const [borderToolOpen, setBorderToolOpen] = useState(false);
+  const [dualBorders, setDualBorders] = useState(false);
+  const [borderTopWidth, setBorderTopWidth] = useState(4);
+  const [borderBottomWidth, setBorderBottomWidth] = useState(3);
+  const [borderTopStrip, setBorderTopStrip] = useState(() => createBorderStripState(4));
+  const [borderBottomStrip, setBorderBottomStrip] = useState(() => createBorderStripState(3));
   const [grid, setGrid] = useState(null);
   const [activeSide, setActiveSide] = useState('front');
   const [sides, setSides] = useState({
@@ -139,6 +155,7 @@ function Designer() {
   const [selectedColor, setSelectedColor] = useState(FABRIC_PALETTE[4].hex);
   const [selectionSource, setSelectionSource] = useState('preset');
   const [customPickerOpen, setCustomPickerOpen] = useState(false);
+  const [customHexDraft, setCustomHexDraft] = useState(() => FABRIC_PALETTE[4].hex);
   const [eraserMode, setEraserMode] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [seamAllowance, setSeamAllowance] = useState(DEFAULT_SEAM_ALLOWANCE);
@@ -217,7 +234,15 @@ function Designer() {
   }, []);
 
   const handleCustomColorChange = useCallback((hex) => {
-    setSelectedColor(hex);
+    if (!hex || typeof hex !== 'string') {
+      return;
+    }
+    const normalized = hex.startsWith('#') ? hex : `#${hex}`;
+    if (!/^#[0-9a-fA-F]{6}$/.test(normalized)) {
+      return;
+    }
+    setSelectedColor(normalized);
+    setCustomHexDraft(normalized.toUpperCase());
     setSelectionSource('custom');
     setSelectedStoreFabric(null);
     setEraserMode(false);
@@ -228,17 +253,30 @@ function Designer() {
       if (!prev) {
         setSelectionSource('custom');
         setEraserMode(false);
+        setCustomHexDraft(selectedColor.toUpperCase());
       }
       return !prev;
     });
-  }, []);
+  }, [selectedColor]);
 
-  const handleOpenScreenColorPicker = useCallback(() => {
+  const handleOpenScreenColorPicker = useCallback(async () => {
     setSelectionSource('custom');
     setCustomPickerOpen(true);
     setEraserMode(false);
-    openScreenColorPickerWindow();
-  }, []);
+    const color = await pickScreenColor();
+    if (color) {
+      handleCustomColorChange(color);
+    }
+  }, [handleCustomColorChange]);
+
+  const handleCustomHexInput = useCallback(
+    (event) => {
+      const raw = event.target.value.trim();
+      setCustomHexDraft(raw.toUpperCase());
+      handleCustomColorChange(raw);
+    },
+    [handleCustomColorChange]
+  );
 
   useEffect(() => subscribeToScreenColorPicker(handleCustomColorChange), [handleCustomColorChange]);
 
@@ -251,6 +289,45 @@ function Designer() {
 
     const { rows: r, columns: c, finishedWidth, finishedHeight, blockSize: block } =
       dimensions;
+
+    // Existing colored grids resize in place: trim left/bottom, grow left/bottom.
+    // Empty or first-time grids start fresh.
+    const hasExistingDesign =
+      grid &&
+      (designHasColoredBlocks({ sides }) ||
+        sides.front.borderProtected ||
+        sides.back.borderProtected);
+
+    if (hasExistingDesign) {
+      const shrinking =
+        r < grid.rows || c < grid.columns;
+      if (shrinking) {
+        const ok = window.confirm(
+          `Resize to ${c}×${r} blocks? Extra width is removed from the left and extra height from the bottom — the rest of your design stays.`
+        );
+        if (!ok) {
+          return;
+        }
+      }
+
+      setSides({
+        front: resizeSideState(sides.front, grid.rows, grid.columns, r, c),
+        back: resizeSideState(sides.back, grid.rows, grid.columns, r, c),
+      });
+      setGrid({
+        rows: r,
+        columns: c,
+        blockSize: block,
+        finishedWidth,
+        finishedHeight,
+      });
+      setEraserMode(false);
+      setSelectionMode(false);
+      setSaveNotice(
+        `Resized to ${c}×${r}. Trimmed from the left/bottom when shrinking.`
+      );
+      return;
+    }
 
     setSides({
       front: createSideState(r, c),
@@ -269,7 +346,7 @@ function Designer() {
     setSavedDesignId(null);
     setSavedDesignName('');
     setSaveNotice('');
-  }, [quiltWidth, quiltHeight, blockSize]);
+  }, [quiltWidth, quiltHeight, blockSize, grid, sides]);
 
   const handleCopyPattern = useCallback(() => {
     if (!grid) return;
@@ -347,26 +424,86 @@ function Designer() {
         snapshot
       );
 
+      const tiledSide = {
+        ...currentSide,
+        cellColors: result.cellColors,
+        cellColorsB: result.cellColorsB,
+        cellDiagonals: result.cellDiagonals,
+        cellFabricIds: result.cellFabricIds,
+        cellFabricIdsB: result.cellFabricIdsB,
+        merges: result.merges,
+        cellMergeIds: result.cellMergeIds,
+        pieceMergeIds:
+          result.pieceMergeIds ?? createEmptyPieceMergeIds(grid.rows * grid.columns),
+        selectedBlocks: [],
+      };
+
+      // Applied borders stay put when pasting a motif across the quilt.
+      const nextSide = restoreProtectedBorderCells(
+        currentSide,
+        tiledSide,
+        grid.rows,
+        grid.columns
+      );
+
       return {
         ...prev,
-        [activeSide]: {
-          ...currentSide,
-          cellColors: result.cellColors,
-          cellColorsB: result.cellColorsB,
-          cellDiagonals: result.cellDiagonals,
-          cellFabricIds: result.cellFabricIds,
-          cellFabricIdsB: result.cellFabricIdsB,
-          merges: result.merges,
-          cellMergeIds: result.cellMergeIds,
-          pieceMergeIds:
-            result.pieceMergeIds ?? createEmptyPieceMergeIds(grid.rows * grid.columns),
-          selectedBlocks: [],
-        },
+        [activeSide]: nextSide,
       };
     });
     setEraserMode(false);
     setSelectionMode(false);
   }, [activeSide, grid, patternClipboard]);
+
+  const handleBorderTopWidthChange = useCallback((width) => {
+    const w = Math.max(1, Math.min(24, Math.floor(Number(width)) || 1));
+    setBorderTopWidth(w);
+    setBorderTopStrip((prev) => resizeBorderStrip(prev, w));
+  }, []);
+
+  const handleBorderBottomWidthChange = useCallback((width) => {
+    const w = Math.max(1, Math.min(24, Math.floor(Number(width)) || 1));
+    setBorderBottomWidth(w);
+    setBorderBottomStrip((prev) => resizeBorderStrip(prev, w));
+  }, []);
+
+  const handleApplyBorder = useCallback(() => {
+    if (!grid) {
+      window.alert('Generate a grid first.');
+      return;
+    }
+
+    const top = borderTopStrip;
+    const bottom = dualBorders ? borderBottomStrip : null;
+    const hasColor =
+      top.cellColors.some(Boolean) ||
+      top.cellColorsB?.some(Boolean) ||
+      (bottom &&
+        (bottom.cellColors.some(Boolean) || bottom.cellColorsB?.some(Boolean)));
+
+    if (!hasColor) {
+      window.alert('Paint your border strip before applying.');
+      return;
+    }
+
+    setSides((prev) => ({
+      ...prev,
+      [activeSide]: applyBorderMotifsToSide(
+        prev[activeSide],
+        grid.rows,
+        grid.columns,
+        top,
+        bottom
+      ),
+    }));
+  }, [activeSide, borderBottomStrip, borderTopStrip, dualBorders, grid]);
+
+  const handleUnlockBorder = useCallback(() => {
+    setSides((prev) => ({
+      ...prev,
+      [activeSide]: { ...prev[activeSide], borderProtected: false },
+    }));
+  }, [activeSide]);
 
   const applyCellColor = useCallback(
     (index, nextColor, nextFabricId = null, half = null) => {
@@ -1616,7 +1753,7 @@ function Designer() {
               </div>
 
               <button type="button" className="abby-patch__button" onClick={handleGenerate}>
-                Generate grid
+                {grid ? 'Resize grid' : 'Generate grid'}
               </button>
             </div>
 
@@ -1761,7 +1898,19 @@ function Designer() {
                           color={selectedColor}
                           onChange={handleCustomColorChange}
                         />
-                        <span className="abby-patch__hex">{selectedColor.toUpperCase()}</span>
+                        <label className="abby-patch__hex-field" htmlFor="custom-hex-color">
+                          <span className="abby-patch__hex-field-label">Hex</span>
+                          <input
+                            id="custom-hex-color"
+                            type="text"
+                            className="abby-patch__hex-input"
+                            value={customHexDraft}
+                            onChange={handleCustomHexInput}
+                            spellCheck={false}
+                            maxLength={7}
+                            aria-label="Custom color hex value"
+                          />
+                        </label>
                         <button
                           type="button"
                           className="abby-patch__tool-button abby-patch__screen-color-button"
@@ -1770,8 +1919,7 @@ function Designer() {
                           Pick from screen
                         </button>
                         <p className="abby-patch__screen-color-hint">
-                          Opens a small window so you can sample a color from anywhere on your
-                          screen.
+                          Samples a color from anywhere on your screen (Chrome or Edge).
                         </p>
                       </div>
                     )}
@@ -1932,6 +2080,28 @@ function Designer() {
                         : 'Turn on Select, then click blocks or triangle halves.'}
                   </p>
                 </section>
+
+                <BorderToolPanel
+                  enabled={borderToolOpen}
+                  dualBorders={dualBorders}
+                  topWidth={borderTopWidth}
+                  bottomWidth={borderBottomWidth}
+                  topStrip={borderTopStrip}
+                  bottomStrip={borderBottomStrip}
+                  selectedColor={selectedColor}
+                  activeFabricId={activeFabricId}
+                  eraserMode={eraserMode}
+                  hasGrid={Boolean(grid)}
+                  borderLocked={Boolean(activeSideData.borderProtected)}
+                  onToggleEnabled={setBorderToolOpen}
+                  onToggleDual={setDualBorders}
+                  onTopWidthChange={handleBorderTopWidthChange}
+                  onBottomWidthChange={handleBorderBottomWidthChange}
+                  onTopStripChange={setBorderTopStrip}
+                  onBottomStripChange={setBorderBottomStrip}
+                  onApplyBorder={handleApplyBorder}
+                  onUnlockBorder={handleUnlockBorder}
+                />
               </div>
 
               <div className="abby-patch__yardage-panel-wrap">
