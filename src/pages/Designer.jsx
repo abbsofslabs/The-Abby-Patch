@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import { HexColorPicker } from 'react-colorful';
 import logo from '../assets/abby-patch-logo.png';
 import BorderToolPanel from '../components/BorderToolPanel';
 import FreePatternModal from '../components/FreePatternModal';
 import FloralDecorations from '../components/FloralDecorations';
 import PaywallModal from '../components/PaywallModal';
-import PdfCaptureGrids from '../components/PdfCaptureGrids';
 import PaletteSwatch from '../components/PaletteSwatch';
 import QuiltGrid from '../components/QuiltGrid';
 import SavedDesignsPanel from '../components/SavedDesignsPanel';
@@ -175,14 +173,11 @@ function Designer() {
   const [fabricCatalog, setFabricCatalog] = useState({});
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [hasDownloadedDesign, setHasDownloadedDesign] = useState(false);
-  const [suppressRepeatHighlight, setSuppressRepeatHighlight] = useState(false);
   const [accessModal, setAccessModal] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [savedEmail, setSavedEmail] = useState(() => getUserEmail());
   const [pendingPdfDownload, setPendingPdfDownload] = useState(false);
   const [patternClipboard, setPatternClipboard] = useState({ front: null, back: null });
-  const frontGridRef = useRef(null);
-  const backGridRef = useRef(null);
   const executePdfDownloadRef = useRef(null);
   const isPaintingRef = useRef(false);
   const paintHalfRef = useRef(null);
@@ -1344,24 +1339,14 @@ function Designer() {
       document.activeElement.blur();
     }
 
-    flushSync(() => {
-      setIsDownloadingPdf(true);
-      setSuppressRepeatHighlight(true);
-    });
+    setIsDownloadingPdf(true);
 
     try {
-      await new Promise((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(resolve));
-      });
-
-      if (!frontGridRef.current || !backGridRef.current) {
-        throw new Error('PDF capture grids were not ready.');
-      }
-
       await generateQuiltPdf({
         logoSrc: logo,
-        frontGridElement: frontGridRef.current,
-        backGridElement: backGridRef.current,
+        grid,
+        frontSide: sides.front,
+        backSide: sides.back,
         frontReport,
         backReport,
         combinedReport: yardageReport,
@@ -1369,22 +1354,14 @@ function Designer() {
       setHasDownloadedDesign(true);
     } catch (error) {
       console.error('Failed to generate PDF:', error);
+      window.alert('Could not create the PDF. Please try again.');
     } finally {
-      flushSync(() => {
-        setSuppressRepeatHighlight(false);
-        setIsDownloadingPdf(false);
-      });
+      setIsDownloadingPdf(false);
     }
   }, [
     grid,
-    sides.front.cellColors,
-    sides.front.cellColorsB,
-    sides.front.cellDiagonals,
-    sides.front.merges,
-    sides.back.cellColors,
-    sides.back.cellColorsB,
-    sides.back.cellDiagonals,
-    sides.back.merges,
+    sides.front,
+    sides.back,
     yardageReport,
     seamAllowance,
     boltWidth,
@@ -1999,7 +1976,7 @@ function Designer() {
                   cellMergeIds={cellMergeIds}
                   pieceMergeIds={pieceMergeIds}
                   selectedBlocks={selectedBlocks}
-                  suppressRepeatHighlight={suppressRepeatHighlight}
+                  suppressRepeatHighlight={false}
                   eraserMode={eraserMode}
                   selectionMode={selectionMode}
                   sideLabel={activeSideLabel}
@@ -2131,28 +2108,6 @@ function Designer() {
               </div>
                 </div>
               </div>
-
-              {isDownloadingPdf && (
-                <PdfCaptureGrids
-                  frontGridRef={frontGridRef}
-                  backGridRef={backGridRef}
-                  rows={grid.rows}
-                  columns={grid.columns}
-                  frontCellColors={sides.front.cellColors}
-                  frontCellColorsB={sides.front.cellColorsB}
-                  frontCellDiagonals={sides.front.cellDiagonals}
-                  frontMerges={sides.front.merges}
-                  frontCellMergeIds={sides.front.cellMergeIds}
-                  frontPieceMergeIds={sides.front.pieceMergeIds}
-                  backCellColors={sides.back.cellColors}
-                  backCellColorsB={sides.back.cellColorsB}
-                  backCellDiagonals={sides.back.cellDiagonals}
-                  backMerges={sides.back.merges}
-                  backCellMergeIds={sides.back.cellMergeIds}
-                  backPieceMergeIds={sides.back.pieceMergeIds}
-                  isExporting={suppressRepeatHighlight}
-                />
-              )}
             </div>
             </>
           )}

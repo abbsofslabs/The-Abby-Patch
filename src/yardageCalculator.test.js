@@ -2,10 +2,20 @@ import {
   buildYardageReport,
   calculatePiecesYardage,
   FABRIC_WIDTH,
+  formatCuttingInches,
   getCutBlockSize,
   getCutTriangleSize,
 } from './yardageCalculator';
 import { mergeSelectedBlocks } from './mergeUtils';
+
+describe('formatCuttingInches', () => {
+  test('writes common quilt fractions in plain language', () => {
+    expect(formatCuttingInches(6)).toBe('6');
+    expect(formatCuttingInches(6.5)).toBe('6 1/2');
+    expect(formatCuttingInches(6.875)).toBe('6 7/8');
+    expect(formatCuttingInches(0.25)).toBe('1/4');
+  });
+});
 
 describe('yardageCalculator merge support', () => {
   test('treats vertical and horizontal rectangles the same for yardage', () => {
@@ -75,7 +85,7 @@ describe('yardageCalculator merge support', () => {
     expect(hst.count).toBe(2);
     expect(hst.squaresNeeded).toBe(1);
     expect(hst.cutWidth).toBeCloseTo(6.875, 5);
-    expect(hst.label).toContain('HST');
+    expect(hst.label).toContain('Triangle');
   });
 
   test('wider bolts need the same or less yardage', () => {

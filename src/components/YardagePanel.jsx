@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { formatCurrency } from '../utils/fabricPricing';
-import { formatDimension, formatYards } from '../yardageCalculator';
+import { formatCuttingInches, formatDimension, formatYards } from '../yardageCalculator';
 
 function YardagePanel({
   grid,
@@ -49,12 +49,11 @@ function YardagePanel({
 
       {showYardage && (
         <p className="abby-patch__yardage-note abby-patch__yardage-note--inline">
-          Cut sizes include {formatDimension(seamAllowance)}&Prime; seam allowance on outer edges
-          (merged blocks count as one cut). Half-square triangles use finished + 7/8&Prime; cut
-          squares at 1/4&Prime; SA (scaled with your seam setting); matching HSTs pair onto shared
-          squares. Yardage uses {formatDimension(yardageReport?.fabricWidth ?? 44)}&Prime; usable
-          bolt width, allows rotating rectangles, and rounds up to the nearest &frac14; yard.
-          Totals combine both quilt sides.
+          Cut sizes already include {formatDimension(seamAllowance)}&Prime; seam allowance. For
+          triangles: cut the listed squares, then cut each square once from corner to corner —
+          one square makes two triangles. Yardage uses a{' '}
+          {formatDimension(yardageReport?.fabricWidth ?? 44)}&Prime; bolt and rounds up to the
+          nearest &frac14; yard. Totals combine both quilt sides.
         </p>
       )}
 
@@ -79,8 +78,14 @@ function YardagePanel({
                 <span>
                   {piece.label} — {piece.count}
                   {piece.shape === 'triangle'
-                    ? ` — cut ${piece.squaresNeeded} sq @ ${formatDimension(piece.cutWidth)}″, slice each on the diagonal`
-                    : ` @ ${formatDimension(piece.cutWidth)}×${formatDimension(piece.cutHeight)}″ cut`}
+                    ? ` — cut ${piece.squaresNeeded} square${
+                        piece.squaresNeeded === 1 ? '' : 's'
+                      } at ${formatCuttingInches(piece.cutWidth)}″, then cut each corner to corner (${
+                        piece.count
+                      } triangles)`
+                    : ` — cut ${piece.count} at ${formatCuttingInches(
+                        piece.cutWidth
+                      )}″ × ${formatCuttingInches(piece.cutHeight)}″`}
                 </span>
               </li>
             ))}

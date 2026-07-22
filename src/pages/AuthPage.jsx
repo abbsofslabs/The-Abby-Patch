@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/abby-patch-logo.png';
@@ -6,7 +6,7 @@ import logo from '../assets/abby-patch-logo.png';
 export default function AuthPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { signIn, signUp } = useAuth();
+  const { user, profile, loading, signIn, signUp } = useAuth();
   const [mode, setMode] = useState(
     searchParams.get('mode') === 'signup' ? 'signup' : 'signin'
   );
@@ -14,7 +14,32 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // After clicking the confirm link, Supabase lands here with a session.
+  useEffect(() => {
+    if (loading || !user || !profile) {
+      return;
+    }
+    navigate(profile.role === 'store' ? '/store' : '/design', { replace: true });
+  }, [loading, user, profile, navigate]);
+
+  useEffect(() => {
+    const hash = window.location.hash.startsWith('#')
+      ? window.location.hash.slice(1)
+      : '';
+    if (!hash) {
+      return;
+    }
+    const params = new URLSearchParams(hash);
+    const hashError = params.get('error_description') || params.get('error');
+    if (hashError) {
+      setError(decodeURIComponent(hashError.replace(/\+/g, ' ')));
+    } else if (params.get('access_token') || params.get('type') === 'signup') {
+      setNotice('Email confirmed. Signing you in…');
+    }
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -105,6 +130,7 @@ export default function AuthPage() {
             />
           </div>
 
+          {notice && <p className="abby-patch__auth-notice">{notice}</p>}
           {error && <p className="abby-patch__auth-error">{error}</p>}
 
           <button type="submit" className="abby-patch__button" disabled={submitting}>

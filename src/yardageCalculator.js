@@ -53,6 +53,49 @@ export function formatDimension(value) {
   return rounded.toFixed(2).replace(/\.?0+$/, '');
 }
 
+/** Friendly inches for cutting lists, e.g. 6.875 → "6 7/8". */
+export function formatCuttingInches(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return formatDimension(value);
+  }
+
+  const rounded = Math.round(n * 16) / 16;
+  let whole = Math.floor(rounded + 1e-9);
+  let sixteenths = Math.round((rounded - whole) * 16);
+
+  if (sixteenths === 16) {
+    whole += 1;
+    sixteenths = 0;
+  }
+
+  const fractions = {
+    0: '',
+    1: '1/16',
+    2: '1/8',
+    3: '3/16',
+    4: '1/4',
+    5: '5/16',
+    6: '3/8',
+    7: '7/16',
+    8: '1/2',
+    9: '9/16',
+    10: '5/8',
+    11: '11/16',
+    12: '3/4',
+    13: '13/16',
+    14: '7/8',
+    15: '15/16',
+  };
+
+  if (sixteenths === 0) {
+    return `${whole}`;
+  }
+
+  const frac = fractions[sixteenths] || formatDimension(rounded);
+  return whole === 0 ? frac : `${whole} ${frac}`;
+}
+
 export function calculateGridDimensions(targetWidth, targetHeight, blockSize) {
   const width = Number(targetWidth);
   const height = Number(targetHeight);
@@ -222,7 +265,7 @@ export function calculatePiecesYardage(
       ...group,
       squaresNeeded,
       label: isTriangle
-        ? `HST ${formatDimension(group.finishedWidth)}″`
+        ? `Triangles ${formatDimension(group.finishedWidth)}″`
         : `${formatDimension(group.finishedWidth)}×${formatDimension(group.finishedHeight)}″`,
     };
   });
