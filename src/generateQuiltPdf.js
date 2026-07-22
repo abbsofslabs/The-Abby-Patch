@@ -153,14 +153,24 @@ function drawSwatchLabel(pdf, x, y, color, label, swatchSize = SWATCH_SIZE, maxL
   });
 }
 
-function formatCuttingInstruction(piece) {
+function formatCuttingInstructions(piece) {
   if (piece.shape === 'triangle') {
     const squares = piece.squaresNeeded ?? Math.ceil(piece.count / 2);
-    return `Cut ${piece.count} half-square triangle${piece.count === 1 ? '' : 's'} (from ${squares} square${squares === 1 ? '' : 's'} at ${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} inches, cut once on the diagonal)`;
+    const size = `${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} in`;
+    return [
+      `Cut ${squares} square${squares === 1 ? '' : 's'} at ${size}`,
+      `Slice each once on the diagonal → ${piece.count} half-square triangle${
+        piece.count === 1 ? '' : 's'
+      }`,
+    ];
   }
   const unit = piece.cutWidth === piece.cutHeight ? 'squares' : 'rectangles';
-  const tooWideNote = piece.tooWide ? ' — wider than the bolt, piece from smaller cuts' : '';
-  return `Cut ${piece.count} ${unit} at ${formatDimension(piece.cutWidth)} × ${formatDimension(piece.cutHeight)} inches${tooWideNote}`;
+  const tooWideNote = piece.tooWide ? ' — wider than the bolt; piece from smaller cuts' : '';
+  return [
+    `Cut ${piece.count} ${unit} at ${formatDimension(piece.cutWidth)} × ${formatDimension(
+      piece.cutHeight
+    )} in${tooWideNote}`,
+  ];
 }
 
 function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, seamAllowance, fabricWidth = 44) {
@@ -172,6 +182,7 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, sea
   const { pdf } = ctx;
   const instructionX = MARGIN + 108;
   const instructionWidth = RIGHT_EDGE - instructionX;
+  const lineGap = CUTTING_FONT + 5;
 
   ctx.ensureSpace(SECTION_FONT + 80);
   ctx.addY(12);
@@ -179,27 +190,27 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, sea
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(SECTION_FONT);
   pdf.text(sectionTitle, MARGIN, ctx.getY());
-  ctx.addY(SECTION_FONT + 14);
+  ctx.addY(SECTION_FONT + 12);
 
   pdf.setFontSize(MIN_FONT);
   pdf.setFont('helvetica', 'normal');
   writeWrappedText(
     ctx,
-    `Grid cell: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in finished. ` +
-      `Merged pieces use one seam allowance on outer edges only (${formatDimension(seamAllowance)} in per side). ` +
-      `Half-square triangles use the classic finished + 7/8 in cut square at 1/4 in seam allowance (scaled with your seam setting); two matching HSTs share one cut square. ` +
-      `Yardage assumes ${formatDimension(fabricWidth)} in usable bolt width and allows rotating rectangles.`,
+    `Finished grid cell: ${formatDimension(blockSize.width)} × ${formatDimension(blockSize.height)} in. ` +
+      `Rectangles include ${formatDimension(seamAllowance)} in seam allowance on each outer edge. ` +
+      `Half-square triangles: cut a square at finished size + ⅞ in (scaled with your seam setting), then cut once on the diagonal — two matching HSTs share one square. ` +
+      `Yardage assumes ${formatDimension(fabricWidth)} in usable bolt width; rectangles may be rotated.`,
     MARGIN,
     CONTENT_WIDTH,
-    MIN_FONT + 8
+    MIN_FONT + 7
   );
-  ctx.addY(6);
+  ctx.addY(8);
 
   rows.forEach((row) => {
     const cutPieces = row.cutPieces || [];
     const instructions = cutPieces
       .filter((piece) => piece.count > 0)
-      .map((piece) => formatCuttingInstruction(piece));
+      .flatMap((piece) => formatCuttingInstructions(piece));
 
     if (!instructions.length) {
       return;
@@ -210,7 +221,7 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, sea
     const instructionLines = instructions.flatMap((instruction) =>
       pdf.splitTextToSize(instruction, instructionWidth)
     );
-    const rowHeight = Math.max(CUTTING_ROW_HEIGHT, instructionLines.length * (CUTTING_FONT + 8));
+    const rowHeight = Math.max(CUTTING_ROW_HEIGHT, instructionLines.length * lineGap + 6);
 
     ctx.ensureSpace(rowHeight);
 
@@ -222,7 +233,7 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, sea
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(CUTTING_FONT);
     instructionLines.forEach((line, lineIndex) => {
-      pdf.text(line, instructionX, ctx.getY() + lineIndex * (CUTTING_FONT + 6));
+      pdf.text(line, instructionX, ctx.getY() + lineIndex * lineGap);
     });
     ctx.addY(rowHeight);
   });
@@ -232,9 +243,10 @@ function drawCuttingGuide(ctx, colors, colorLabels, blockSize, sectionTitle, sea
 
 async function captureGrid(gridElement) {
   return html2canvas(gridElement, {
-    scale: 2,
+    scale: 3,
     backgroundColor: '#F5F2E9',
     logging: false,
+    useCORS: true,
   });
 }
 

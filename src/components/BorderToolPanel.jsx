@@ -114,8 +114,9 @@ function BorderStripEditor({
       <h3 className="abby-patch__border-strip-title">{label}</h3>
       <p className="abby-patch__border-strip-hint">
         Left = outer edge of the quilt, right = toward the center. Paint each
-        layer, then apply — it fills a {strip.columns}-block-wide frame all the
-        way around. Right-click a block for a diagonal cut.
+        layer, then apply — it fills a {strip.columns}-block-wide frame. Same
+        colors merge into one strip; different colors stay separate. Right-click
+        a block for a diagonal cut.
       </p>
       <div className="abby-patch__border-strip-editor">
         <div className="abby-patch__border-strip-labels" aria-hidden="true">
@@ -175,7 +176,8 @@ function BorderToolPanel({
       <p className="abby-patch__tool-box-desc">
         Choose how many blocks wide the border should be (for example 4), paint
         that cross-section, then apply it as a thick frame around the quilt.
-        Once applied, paste-across leaves the border alone.
+        Matching colors merge into one strip automatically; different colors stay
+        as separate strips. Once applied, paste-across leaves the border alone.
       </p>
 
       <label className="abby-patch__border-check">

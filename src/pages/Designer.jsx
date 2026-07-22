@@ -86,6 +86,8 @@ function createSideState(rows, columns) {
     pieceMergeIds: createEmptyPieceMergeIds(cellCount),
     borderProtected: false,
     borderDepth: 0,
+    borderTopDepth: 0,
+    borderBottomDepth: 0,
   };
 }
 
@@ -132,6 +134,8 @@ function normalizeSideState(side, rows, columns) {
     pieceMergeIds,
     borderProtected: Boolean(side?.borderProtected),
     borderDepth: Math.max(0, Number(side?.borderDepth) || 0),
+    borderTopDepth: Math.max(0, Number(side?.borderTopDepth) || 0),
+    borderBottomDepth: Math.max(0, Number(side?.borderBottomDepth) || 0),
   };
 }
 
@@ -507,6 +511,8 @@ function Designer() {
         ...prev[activeSide],
         borderProtected: false,
         borderDepth: 0,
+        borderTopDepth: 0,
+        borderBottomDepth: 0,
       },
     }));
   }, [activeSide]);
@@ -2039,7 +2045,7 @@ function Designer() {
                       onClick={handleClearSelection}
                       disabled={!selectedBlocks.length}
                     >
-                      Clear
+                      Unselect all
                     </button>
                     <button
                       type="button"

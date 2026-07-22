@@ -1,4 +1,8 @@
-import { createEmptyPieceMergeIds, dissolveMergesTouchingIndices } from './mergeUtils';
+import {
+  createEmptyPieceMergeIds,
+  dissolveMergesTouchingIndices,
+  mergePieces,
+} from './mergeUtils';
 
 /**
  * Create a 1×width strip for a border cross-section.
@@ -88,10 +92,200 @@ function writeCell(sideArrays, index, cell) {
   sideArrays.cellDiagonals[index] = cell.diagonal;
 }
 
+function colorKey(color) {
+  return color ? String(color).toLowerCase() : null;
+}
+
+function applyMergeRect(side, rows, columns, minRow, maxRow, minCol, maxCol) {
+  if (maxRow < minRow || maxCol < minCol) {
+    return;
+  }
+
+  const pieces = [];
+  for (let row = minRow; row <= maxRow; row += 1) {
+    for (let col = minCol; col <= maxCol; col += 1) {
+      pieces.push({ index: row * columns + col, half: null });
+    }
+  }
+
+  if (pieces.length < 2) {
+    return;
+  }
+
+  const result = mergePieces(
+    pieces,
+    side.cellColors,
+    side.cellColorsB,
+    side.cellDiagonals,
+    columns,
+    rows,
+    side.merges,
+    side.pieceMergeIds
+  );
+
+  if (!result.ok) {
+    return;
+  }
+
+  side.merges = result.merges;
+  side.pieceMergeIds = result.pieceMergeIds;
+  side.cellMergeIds = result.cellMergeIds;
+}
+
+function rowIsSolidColor(side, row, columns, expectedColor) {
+  for (let col = 0; col < columns; col += 1) {
+    const index = row * columns + col;
+    if (side.cellDiagonals?.[index]) {
+      return false;
+    }
+    if (colorKey(side.cellColors?.[index]) !== expectedColor) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function colIsSolidColor(side, col, rowStart, rowEnd, columns, expectedColor) {
+  for (let row = rowStart; row < rowEnd; row += 1) {
+    const index = row * columns + col;
+    if (side.cellDiagonals?.[index]) {
+      return false;
+    }
+    if (colorKey(side.cellColors?.[index]) !== expectedColor) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Merge consecutive same-color full-width rows into strip rectangles. */
+function mergeHorizontalStripRuns(side, rows, columns, rowStart, rowEnd) {
+  let row = rowStart;
+  while (row < rowEnd) {
+    const sampleIndex = row * columns;
+    const expected = colorKey(side.cellColors?.[sampleIndex]);
+    if (!expected || !rowIsSolidColor(side, row, columns, expected)) {
+      row += 1;
+      continue;
+    }
+
+    let end = row + 1;
+    while (end < rowEnd && rowIsSolidColor(side, end, columns, expected)) {
+      end += 1;
+    }
+
+    applyMergeRect(side, rows, columns, row, end - 1, 0, columns - 1);
+    row = end;
+  }
+}
+
+/** Merge consecutive same-color full-height columns into strip rectangles. */
+function mergeVerticalStripRuns(side, rows, columns, colStart, colEnd, rowStart, rowEnd) {
+  if (rowEnd - rowStart < 1 || colEnd - colStart < 1) {
+    return;
+  }
+
+  let col = colStart;
+  while (col < colEnd) {
+    const sampleIndex = rowStart * columns + col;
+    const expected = colorKey(side.cellColors?.[sampleIndex]);
+    if (
+      !expected ||
+      !colIsSolidColor(side, col, rowStart, rowEnd, columns, expected)
+    ) {
+      col += 1;
+      continue;
+    }
+
+    let end = col + 1;
+    while (
+      end < colEnd &&
+      colIsSolidColor(side, end, rowStart, rowEnd, columns, expected)
+    ) {
+      end += 1;
+    }
+
+    applyMergeRect(side, rows, columns, rowStart, rowEnd - 1, col, end - 1);
+    col = end;
+  }
+}
+
+/**
+ * Same-color border layers become one merged strip per side.
+ * Different colors stay as separate single-layer strips.
+ */
+export function autoMergeAppliedBorder(
+  side,
+  rows,
+  columns,
+  topDepth = null,
+  bottomDepth = null
+) {
+  const topD = Math.max(
+    0,
+    Number(topDepth ?? side.borderTopDepth ?? side.borderDepth) || 0
+  );
+  const bottomD = Math.max(
+    0,
+    Number(bottomDepth ?? side.borderBottomDepth ?? side.borderDepth) || 0
+  );
+
+  if (topD < 1 && bottomD < 1) {
+    return side;
+  }
+
+  const cellCount = rows * columns;
+  const next = {
+    ...side,
+    merges: { ...(side.merges || {}) },
+    cellMergeIds: [...(side.cellMergeIds || Array(cellCount).fill(null))],
+    pieceMergeIds: (side.pieceMergeIds || createEmptyPieceMergeIds(cellCount)).map(
+      (piece) => ({ a: piece?.a ?? null, b: piece?.b ?? null })
+    ),
+    borderTopDepth: topD,
+    borderBottomDepth: bottomD,
+    borderDepth: Math.max(topD, bottomD),
+  };
+
+  mergeHorizontalStripRuns(next, rows, columns, 0, Math.min(topD, rows));
+
+  const bottomStart = Math.max(Math.min(topD, rows), rows - bottomD);
+  mergeHorizontalStripRuns(next, rows, columns, bottomStart, rows);
+
+  const middleStart = Math.min(topD, rows);
+  const middleEnd = Math.max(middleStart, rows - bottomD);
+  const sideDepth = topD;
+
+  if (middleEnd > middleStart && sideDepth > 0) {
+    mergeVerticalStripRuns(
+      next,
+      rows,
+      columns,
+      0,
+      Math.min(sideDepth, columns),
+      middleStart,
+      middleEnd
+    );
+    const rightStart = Math.max(Math.min(sideDepth, columns), columns - sideDepth);
+    mergeVerticalStripRuns(
+      next,
+      rows,
+      columns,
+      rightStart,
+      columns,
+      middleStart,
+      middleEnd
+    );
+  }
+
+  return next;
+}
+
 /**
  * Stamp a thick border frame onto a quilt side.
  * The strip is a depth cross-section: [0] outer edge → [n-1] toward the center.
  * Top (and left/right) use topStrip; bottom uses bottomStrip when provided.
+ * Same-color layers auto-merge into strips; different colors stay separate.
  */
 export function applyBorderMotifsToSide(side, rows, columns, topStrip, bottomStrip = null) {
   if (!topStrip?.cellColors?.length || rows < 1 || columns < 1) {
@@ -124,6 +318,8 @@ export function applyBorderMotifsToSide(side, rows, columns, topStrip, bottomStr
     pieceMergeIds: dissolved.pieceMergeIds,
     borderProtected: true,
     borderDepth: protectDepth,
+    borderTopDepth: topDepth,
+    borderBottomDepth: bottomDepth,
   };
 
   // Top band — full width, includes top corners (outside → inward by row).
@@ -163,7 +359,7 @@ export function applyBorderMotifsToSide(side, rows, columns, topStrip, bottomStr
     }
   }
 
-  return next;
+  return autoMergeAppliedBorder(next, rows, columns, topDepth, bottomDepth);
 }
 
 /**
@@ -172,12 +368,28 @@ export function applyBorderMotifsToSide(side, rows, columns, topStrip, bottomStr
  */
 export function restoreProtectedBorderCells(previousSide, tiledSide, rows, columns) {
   if (!previousSide?.borderProtected) {
-    return { ...tiledSide, borderProtected: false, borderDepth: 0 };
+    return {
+      ...tiledSide,
+      borderProtected: false,
+      borderDepth: 0,
+      borderTopDepth: 0,
+      borderBottomDepth: 0,
+    };
   }
 
   const depth = Math.max(1, previousSide.borderDepth || 1);
+  const topDepth = Math.max(1, previousSide.borderTopDepth || depth);
+  const bottomDepth = Math.max(1, previousSide.borderBottomDepth || depth);
   const protectedCells = getBorderCellIndices(rows, columns, depth);
   const cellCount = rows * columns;
+
+  const dissolved = dissolveMergesTouchingIndices(
+    tiledSide.merges || {},
+    tiledSide.cellMergeIds || Array(cellCount).fill(null),
+    [...protectedCells],
+    tiledSide.pieceMergeIds || createEmptyPieceMergeIds(cellCount)
+  );
+
   const next = {
     ...tiledSide,
     cellColors: [...tiledSide.cellColors],
@@ -185,8 +397,13 @@ export function restoreProtectedBorderCells(previousSide, tiledSide, rows, colum
     cellFabricIds: [...(tiledSide.cellFabricIds || Array(cellCount).fill(null))],
     cellFabricIdsB: [...(tiledSide.cellFabricIdsB || Array(cellCount).fill(null))],
     cellDiagonals: [...(tiledSide.cellDiagonals || Array(cellCount).fill(null))],
+    merges: dissolved.merges,
+    cellMergeIds: dissolved.cellMergeIds,
+    pieceMergeIds: dissolved.pieceMergeIds,
     borderProtected: true,
     borderDepth: depth,
+    borderTopDepth: topDepth,
+    borderBottomDepth: bottomDepth,
   };
 
   protectedCells.forEach((index) => {
@@ -197,5 +414,5 @@ export function restoreProtectedBorderCells(previousSide, tiledSide, rows, colum
     next.cellDiagonals[index] = previousSide.cellDiagonals?.[index] ?? null;
   });
 
-  return next;
+  return autoMergeAppliedBorder(next, rows, columns, topDepth, bottomDepth);
 }

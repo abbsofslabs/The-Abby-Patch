@@ -79,7 +79,7 @@ function YardagePanel({
                 <span>
                   {piece.label} — {piece.count}
                   {piece.shape === 'triangle'
-                    ? ` (cut ${piece.squaresNeeded} sq @ ${formatDimension(piece.cutWidth)}″)`
+                    ? ` — cut ${piece.squaresNeeded} sq @ ${formatDimension(piece.cutWidth)}″, slice each on the diagonal`
                     : ` @ ${formatDimension(piece.cutWidth)}×${formatDimension(piece.cutHeight)}″ cut`}
                 </span>
               </li>

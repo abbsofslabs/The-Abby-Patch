@@ -91,6 +91,40 @@ describe('borderUtils', () => {
     // Center untouched
     expect(next.cellColors[14]).toBe(null); // row2 col2
     expect(next.cellColors[21]).toBe(null); // row3 col3
+
+    // Different colors → separate single-layer strips (top outer vs top inner).
+    const topOuterId = next.cellMergeIds[0];
+    const topInnerId = next.cellMergeIds[6]; // row1 col0
+    expect(topOuterId).not.toBeNull();
+    expect(topInnerId).not.toBeNull();
+    expect(topOuterId).not.toBe(topInnerId);
+    expect(next.merges[topOuterId].height).toBe(1);
+    expect(next.merges[topOuterId].width).toBe(6);
+    expect(next.merges[topInnerId].height).toBe(1);
+    expect(next.merges[topInnerId].width).toBe(6);
+  });
+
+  test('same-color border layers merge into one thicker strip', () => {
+    const side = {
+      cellColors: Array(36).fill(null),
+      cellColorsB: Array(36).fill(null),
+      cellFabricIds: Array(36).fill(null),
+      cellFabricIdsB: Array(36).fill(null),
+      cellDiagonals: Array(36).fill(null),
+      merges: {},
+      cellMergeIds: Array(36).fill(null),
+      pieceMergeIds: Array.from({ length: 36 }, () => ({ a: null, b: null })),
+    };
+    const top = createBorderStripState(2);
+    top.cellColors = ['#aa0000', '#aa0000'];
+
+    const next = applyBorderMotifsToSide(side, 6, 6, top);
+    const topId = next.cellMergeIds[0];
+    expect(topId).not.toBeNull();
+    expect(next.cellMergeIds[6]).toBe(topId); // row1 also in same merge
+    expect(next.merges[topId].height).toBe(2);
+    expect(next.merges[topId].width).toBe(6);
+    expect(next.merges[topId].color.toLowerCase()).toBe('#aa0000');
   });
 
   test('applyBorderMotifsToSide supports different top and bottom depths', () => {
@@ -120,11 +154,16 @@ describe('borderUtils', () => {
     const previous = {
       borderProtected: true,
       borderDepth: 1,
+      borderTopDepth: 1,
+      borderBottomDepth: 1,
       cellColors: Array(9).fill('#border'),
       cellColorsB: Array(9).fill(null),
       cellFabricIds: Array(9).fill(null),
       cellFabricIdsB: Array(9).fill(null),
       cellDiagonals: Array(9).fill(null),
+      merges: {},
+      cellMergeIds: Array(9).fill(null),
+      pieceMergeIds: Array.from({ length: 9 }, () => ({ a: null, b: null })),
     };
     previous.cellColors[4] = '#center';
 
@@ -144,5 +183,7 @@ describe('borderUtils', () => {
     expect(restored.cellColors[4]).toBe('#tiled');
     expect(restored.borderProtected).toBe(true);
     expect(restored.borderDepth).toBe(1);
+    // Outer ring same color → re-merged into strips after paste restore.
+    expect(restored.cellMergeIds[0]).not.toBeNull();
   });
 });
