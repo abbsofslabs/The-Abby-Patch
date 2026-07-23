@@ -83,6 +83,8 @@ create table if not exists public.fabrics (
   image_url text not null,
   price_per_yard numeric(10, 2) not null check (price_per_yard >= 0),
   primary_color text not null,
+  motif_width_in numeric(10, 4),
+  motif_height_in numeric(10, 4),
   created_at timestamptz not null default now()
 );
 

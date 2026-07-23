@@ -2623,3 +2623,112 @@
   color: var(--brown-mid);
 }
 
+.abby-patch__motif-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+}
+
+.abby-patch__motif-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.abby-patch__motif-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--brown-mid);
+  line-height: 1.4;
+}
+
+.abby-patch__motif-stage {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  border: 2px solid var(--brown);
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  background: #ddd;
+}
+
+.abby-patch__motif-stage--eyedropper {
+  cursor: crosshair;
+}
+
+.abby-patch__motif-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+.abby-patch__motif-crop {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--brown), inset 0 0 0 1px rgba(61, 46, 38, 0.35);
+  background: rgba(141, 160, 128, 0.2);
+  pointer-events: none;
+}
+
+.abby-patch__motif-color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.abby-patch__motif-swatch {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.abby-patch__motif-color-label {
+  font-size: 0.85rem;
+  color: var(--brown-mid);
+}
+
+.abby-patch__motif-sizes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+
+.abby-patch__motif-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.abby-patch__motif-preview {
+  width: min(100%, 220px);
+  aspect-ratio: 1;
+  border: 2px solid var(--brown);
+  border-radius: 6px;
+  background-color: var(--cream);
+}
+
+.abby-patch__cell-fabric {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.abby-patch__cell--fabric {
+  background-color: transparent;
+}
+
+.abby-patch__cell--diagonal .abby-patch__cell-fabric {
+  z-index: 0;
+}
+
+.abby-patch__cell--diagonal .abby-patch__cell-diagonal {
+  z-index: 1;
+}
+

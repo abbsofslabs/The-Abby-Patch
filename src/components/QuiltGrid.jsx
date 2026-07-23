@@ -8,6 +8,10 @@ function QuiltGrid({
   cellColors,
   cellColorsB,
   cellDiagonals,
+  cellFabricIds,
+  cellFabricIdsB,
+  fabricCatalog,
+  blockSizeInches,
   merges,
   cellMergeIds,
   pieceMergeIds,
@@ -33,6 +37,7 @@ function QuiltGrid({
 
   const selectedSet = useMemo(() => new Set(selectedBlocks), [selectedBlocks]);
   const isDense = Math.max(rows, columns) > 24;
+  const catalog = fabricCatalog || {};
 
   const gridClassName = [
     'abby-patch__grid',
@@ -54,14 +59,20 @@ function QuiltGrid({
           !suppressRepeatHighlight && Boolean(diagonal) && selectedSet.has(pieceKey(index, 'a'));
         const selectedB =
           !suppressRepeatHighlight && Boolean(diagonal) && selectedSet.has(pieceKey(index, 'b'));
+        const fabricIdA = cellFabricIds?.[index] ?? null;
+        const fabricIdB = cellFabricIdsB?.[index] ?? null;
 
         return (
           <GridCell
             key={index}
             index={index}
+            columns={columns}
             color={color}
             colorB={cellColorsB?.[index] ?? null}
             diagonal={diagonal}
+            fabricA={fabricIdA ? catalog[fabricIdA] : null}
+            fabricB={fabricIdB ? catalog[fabricIdB] : null}
+            blockSizeInches={blockSizeInches}
             mergeBorders={getMergeBorders(index, columns, merges, cellMergeIds, {
               rows,
               pieceMergeIds,

@@ -1,6 +1,7 @@
 import { memo, useCallback } from 'react';
 import { CREAM } from '../constants';
 import { getHalfFromPointerEvent } from '../triangleUtils';
+import { getFabricTileStyle } from '../utils/fabricMotif';
 
 /** Bleed past a merge-hidden edge so same-color fills underlap the neighbor. */
 const BLEED = 1.5;
@@ -15,19 +16,49 @@ function SelectionPoly({ points }) {
   );
 }
 
-function nwsePolygons(fillA, fillB, selectedA, selectedB, hideTop, hideRight, hideBottom, hideLeft) {
-  // Half A owns top + right; half B owns bottom + left.
+function clipPathFromPoints(points) {
+  return `polygon(${points
+    .trim()
+    .split(/\s+/)
+    .map((pair) => {
+      const [x, y] = pair.split(',');
+      return `${x}% ${y}%`;
+    })
+    .join(', ')})`;
+}
+
+function nwseClipPaths(hideTop, hideRight, hideBottom, hideLeft) {
   const aT = hideTop ? -BLEED : 0;
   const aR = hideRight ? 100 + BLEED : 100;
   const bB = hideBottom ? 100 + BLEED : 100;
   const bL = hideLeft ? -BLEED : 0;
-  const polyA = `0,${aT} ${aR},${aT} ${aR},100`;
-  const polyB = `${bL},0 ${bL},${bB} 100,${bB}`;
+  return {
+    a: clipPathFromPoints(`0,${aT} ${aR},${aT} ${aR},100`),
+    b: clipPathFromPoints(`${bL},0 ${bL},${bB} 100,${bB}`),
+    polyA: `0,${aT} ${aR},${aT} ${aR},100`,
+    polyB: `${bL},0 ${bL},${bB} 100,${bB}`,
+  };
+}
+
+function neswClipPaths(hideTop, hideRight, hideBottom, hideLeft) {
+  const aT = hideTop ? -BLEED : 0;
+  const aL = hideLeft ? -BLEED : 0;
+  const bB = hideBottom ? 100 + BLEED : 100;
+  const bR = hideRight ? 100 + BLEED : 100;
+  return {
+    a: clipPathFromPoints(`${aL},${aT} 100,${aT} ${aL},100`),
+    b: clipPathFromPoints(`${bR},0 ${bR},${bB} 0,${bB}`),
+    polyA: `${aL},${aT} 100,${aT} ${aL},100`,
+    polyB: `${bR},0 ${bR},${bB} 0,${bB}`,
+  };
+}
+
+function nwsePolygons(fillA, fillB, selectedA, selectedB, hideTop, hideRight, hideBottom, hideLeft) {
+  const { polyA, polyB } = nwseClipPaths(hideTop, hideRight, hideBottom, hideLeft);
   return (
     <>
       <polygon points={polyA} fill={fillA} />
       <polygon points={polyB} fill={fillB} />
-      {/* Inset the cut line so its stroke never spills into a merged neighbor. */}
       <line x1="2" y1="2" x2="98" y2="98" />
       {selectedA && <SelectionPoly points={polyA} />}
       {selectedB && <SelectionPoly points={polyB} />}
@@ -36,13 +67,7 @@ function nwsePolygons(fillA, fillB, selectedA, selectedB, hideTop, hideRight, hi
 }
 
 function neswPolygons(fillA, fillB, selectedA, selectedB, hideTop, hideRight, hideBottom, hideLeft) {
-  // Half A owns top + left; half B owns bottom + right.
-  const aT = hideTop ? -BLEED : 0;
-  const aL = hideLeft ? -BLEED : 0;
-  const bB = hideBottom ? 100 + BLEED : 100;
-  const bR = hideRight ? 100 + BLEED : 100;
-  const polyA = `${aL},${aT} 100,${aT} ${aL},100`;
-  const polyB = `${bR},0 ${bR},${bB} 0,${bB}`;
+  const { polyA, polyB } = neswClipPaths(hideTop, hideRight, hideBottom, hideLeft);
   return (
     <>
       <polygon points={polyA} fill={fillA} />
@@ -63,8 +88,22 @@ function mergeBleedShadow(fill, hideTop, hideRight, hideBottom, hideLeft) {
   return shadows.length ? shadows.join(', ') : undefined;
 }
 
+function FabricLayer({ style, clipPath }) {
+  if (!style) {
+    return null;
+  }
+  return (
+    <span
+      className="abby-patch__cell-fabric"
+      style={clipPath ? { ...style, clipPath } : style}
+      aria-hidden="true"
+    />
+  );
+}
+
 function GridCell({
   index,
+  columns,
   color,
   colorB,
   diagonal,
@@ -73,6 +112,9 @@ function GridCell({
   selectedB,
   selectedFull,
   sideLabel,
+  fabricA,
+  fabricB,
+  blockSizeInches,
   onCellPointerDown,
   onCellPointerEnter,
   onCellPointerUp,
@@ -128,7 +170,6 @@ function GridCell({
   );
 
   const fillA = color || CREAM;
-  // A cut cell's B half must not inherit A's color, or the whole square looks painted.
   const fillB = diagonal ? colorB || CREAM : fillA;
   const showDiagonal =
     mergeBorders?.showDiagonal ?? (Boolean(diagonal) && !mergeBorders?.hideDiagonal);
@@ -144,6 +185,11 @@ function GridCell({
   const hideLeft = Boolean(mergeBorders?.hideLeft);
   const hideRight = Boolean(mergeBorders?.hideRight);
 
+  const col = columns > 0 ? index % columns : 0;
+  const row = columns > 0 ? Math.floor(index / columns) : 0;
+  const tileA = getFabricTileStyle(fabricA, blockSizeInches, col, row);
+  const tileB = getFabricTileStyle(fabricB || fabricA, blockSizeInches, col, row);
+
   const className = [
     'abby-patch__cell',
     isSelected ? 'abby-patch__cell--selected' : '',
@@ -153,16 +199,27 @@ function GridCell({
     hideRight ? 'abby-patch__cell--merge-hide-right' : '',
     mergeBorders?.isAnchor ? 'abby-patch__cell--merge-anchor' : '',
     showDiagonal ? 'abby-patch__cell--diagonal' : '',
+    tileA && !showDiagonal ? 'abby-patch__cell--fabric' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   const cellStyle = showDiagonal
     ? { backgroundColor: 'transparent' }
-    : {
-        backgroundColor: fillA,
-        boxShadow: mergeBleedShadow(fillA, hideTop, hideRight, hideBottom, hideLeft),
-      };
+    : tileA
+      ? {
+          ...tileA,
+          boxShadow: mergeBleedShadow(fillA, hideTop, hideRight, hideBottom, hideLeft),
+        }
+      : {
+          backgroundColor: fillA,
+          boxShadow: mergeBleedShadow(fillA, hideTop, hideRight, hideBottom, hideLeft),
+        };
+
+  const clips =
+    diagonal === 'nwse'
+      ? nwseClipPaths(hideTop, hideRight, hideBottom, hideLeft)
+      : neswClipPaths(hideTop, hideRight, hideBottom, hideLeft);
 
   return (
     <button
@@ -177,6 +234,12 @@ function GridCell({
       aria-label={`${sideLabel} patch ${index + 1}${color ? `, color ${color}` : ', empty'}${isSelected ? ', selected' : ''}${mergeLabel ? `, merged ${mergeLabel}` : ''}${diagonal ? `, diagonal ${diagonal}` : ''}`}
       aria-pressed={isSelected}
     >
+      {showDiagonal && (tileA || tileB) && (
+        <>
+          <FabricLayer style={tileA || { backgroundColor: fillA }} clipPath={clips.a} />
+          <FabricLayer style={tileB || { backgroundColor: fillB }} clipPath={clips.b} />
+        </>
+      )}
       {showDiagonal && (
         <svg
           className={`abby-patch__cell-diagonal abby-patch__cell-diagonal--${diagonal}`}
@@ -186,8 +249,8 @@ function GridCell({
         >
           {diagonal === 'nwse'
             ? nwsePolygons(
-                fillA,
-                fillB,
+                tileA ? 'transparent' : fillA,
+                tileB ? 'transparent' : fillB,
                 selectedA,
                 selectedB,
                 hideTop,
@@ -196,8 +259,8 @@ function GridCell({
                 hideLeft
               )
             : neswPolygons(
-                fillA,
-                fillB,
+                tileA ? 'transparent' : fillA,
+                tileB ? 'transparent' : fillB,
                 selectedA,
                 selectedB,
                 hideTop,

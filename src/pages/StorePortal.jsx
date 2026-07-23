@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { HexColorPicker } from 'react-colorful';
 import logo from '../assets/abby-patch-logo.png';
+import FabricMotifEditor from '../components/FabricMotifEditor';
 import { useAuth } from '../context/AuthContext';
+import { cropImageToBlob } from '../utils/fabricMotif';
 import {
   createFabric,
   fetchFabricsForStore,
@@ -13,6 +14,7 @@ import { createStore, fetchStoreByOwner, updateStore } from '../utils/supabase/s
 
 export default function StorePortal() {
   const { user, profile, signOut } = useAuth();
+  const motifImageRef = useRef(null);
   const [store, setStore] = useState(null);
   const [fabrics, setFabrics] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,10 @@ export default function StorePortal() {
   const [primaryColor, setPrimaryColor] = useState('#C4898C');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
+  const [editorMode, setEditorMode] = useState('eyedropper');
+  const [cropRect, setCropRect] = useState(null);
+  const [motifWidthIn, setMotifWidthIn] = useState('6');
+  const [motifHeightIn, setMotifHeightIn] = useState('6');
 
   const loadStore = useCallback(async () => {
     if (!user) {
@@ -63,17 +69,30 @@ export default function StorePortal() {
   useEffect(() => {
     if (!imageFile) {
       setImagePreview('');
+      setCropRect(null);
       return undefined;
     }
 
     const url = URL.createObjectURL(imageFile);
     setImagePreview(url);
+    setCropRect(null);
+    setEditorMode('eyedropper');
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
 
   if (profile && profile.role !== 'store') {
     return <Navigate to="/design" replace />;
   }
+
+  const resetFabricForm = () => {
+    setFabricName('');
+    setImageFile(null);
+    setCropRect(null);
+    setPrimaryColor('#C4898C');
+    setMotifWidthIn('6');
+    setMotifHeightIn('6');
+    setEditorMode('eyedropper');
+  };
 
   const handleSaveStore = async (event) => {
     event.preventDefault();
@@ -120,23 +139,49 @@ export default function StorePortal() {
       return;
     }
 
+    const width = Number(motifWidthIn);
+    const height = Number(motifHeightIn);
+    if (!(width > 0) || !(height > 0)) {
+      setError('Enter how many inches wide and tall one print block is.');
+      return;
+    }
+
+    if (!cropRect || cropRect.w < 0.02 || cropRect.h < 0.02) {
+      setError('Drag a box around one full print block on the photo.');
+      setEditorMode('crop');
+      return;
+    }
+
+    const img = motifImageRef.current;
+    if (!img?.naturalWidth) {
+      setError('Wait for the photo to finish loading, then try again.');
+      return;
+    }
+
     setUploading(true);
     setError('');
     setNotice('');
 
     try {
-      const imageUrl = await uploadFabricImage(user.id, imageFile);
+      const croppedBlob = await cropImageToBlob(img, cropRect);
+      const croppedFile = new File([croppedBlob], `${fabricName.trim() || 'fabric'}-motif.jpg`, {
+        type: 'image/jpeg',
+      });
+      const imageUrl = await uploadFabricImage(user.id, croppedFile);
       const created = await createFabric({
         storeId: store.id,
         name: fabricName.trim() || 'Fabric',
         imageUrl,
         pricePerYard: Number(pricePerYard),
         primaryColor,
+        motifWidthIn: width,
+        motifHeightIn: height,
       });
       setFabrics((prev) => [mapFabricRow(created, store.store_name), ...prev]);
-      setFabricName('');
-      setImageFile(null);
-      setNotice('Fabric added. Customers can find it by searching your store name.');
+      resetFabricForm();
+      setNotice(
+        'Fabric added with print size. Customers will see the pattern tiled on their quilt grid.'
+      );
     } catch (uploadError) {
       setError(uploadError.message || 'Unable to upload fabric.');
     } finally {
@@ -153,8 +198,8 @@ export default function StorePortal() {
             <p className="abby-patch__store-kicker">Store account</p>
             <h1 className="abby-patch__store-heading">Shop dashboard</h1>
             <p className="abby-patch__store-lede">
-              This is not the quilt designer. Set up your shop, then upload fabric photos so
-              customers can paint with your inventory and see pricing.
+              List your shop and upload fabrics with a real print size so customers see the pattern
+              on their quilt.
             </p>
           </div>
           <div className="abby-patch__header-actions">
@@ -162,7 +207,7 @@ export default function StorePortal() {
             <button
               type="button"
               className="abby-patch__button abby-patch__button--secondary"
-              onClick={() => signOut()}
+              onClick={signOut}
             >
               Sign out
             </button>
@@ -170,9 +215,10 @@ export default function StorePortal() {
         </header>
 
         <ol className="abby-patch__store-steps">
-          <li className={store ? 'is-done' : 'is-active'}>1. Store info</li>
-          <li className={store ? 'is-active' : ''}>2. Upload fabrics</li>
-          <li className={fabrics.length ? 'is-done' : ''}>3. Customers find you by name</li>
+          <li>Save your store profile</li>
+          <li>Upload a fabric photo</li>
+          <li>Eyedrop the main color and box one print repeat</li>
+          <li>Enter that print’s size in inches</li>
         </ol>
 
         {loading ? (
@@ -182,7 +228,7 @@ export default function StorePortal() {
             <section className="abby-patch__panel abby-patch__store-section">
               <h2 className="abby-patch__section-title">Store information</h2>
               <p className="abby-patch__tool-box-desc">
-                Customers search by your store name when designing quilts.
+                Customers search by your store name to find your fabrics.
               </p>
               <form className="abby-patch__store-form" onSubmit={handleSaveStore}>
                 <div className="abby-patch__input-group abby-patch__input-group--full">
@@ -192,7 +238,6 @@ export default function StorePortal() {
                     value={storeName}
                     onChange={(event) => setStoreName(event.target.value)}
                     required
-                    placeholder="e.g. Cotton & Thread Quilt Shop"
                   />
                 </div>
                 <div className="abby-patch__input-group abby-patch__input-group--full">
@@ -202,11 +247,10 @@ export default function StorePortal() {
                     value={address}
                     onChange={(event) => setAddress(event.target.value)}
                     required
-                    placeholder="Street, city, state"
                   />
                 </div>
                 <div className="abby-patch__input-group abby-patch__input-group--full">
-                  <label htmlFor="store-email">Store email</label>
+                  <label htmlFor="store-email">Contact email</label>
                   <input
                     id="store-email"
                     type="email"
@@ -229,8 +273,8 @@ export default function StorePortal() {
               <section className="abby-patch__panel abby-patch__store-section">
                 <h2 className="abby-patch__section-title">Upload fabric</h2>
                 <p className="abby-patch__tool-box-desc">
-                  Add a photo, price per yard, and primary color. Customers can paint quilt blocks
-                  with this fabric instead of the built-in color palette.
+                  Photo + eyedropper color + one print block + its real size in inches. The quilt
+                  grid will crop or tile that print to match each block.
                 </p>
                 <form className="abby-patch__store-form" onSubmit={handleUploadFabric}>
                   <div className="abby-patch__input-group abby-patch__input-group--full">
@@ -263,21 +307,25 @@ export default function StorePortal() {
                       onChange={(event) => setImageFile(event.target.files?.[0] ?? null)}
                       required
                     />
-                    {imagePreview && (
-                      <img
-                        src={imagePreview}
-                        alt="Fabric preview"
-                        className="abby-patch__fabric-upload-preview"
-                      />
-                    )}
                   </div>
-                  <div className="abby-patch__input-group abby-patch__input-group--full">
-                    <label>Primary color (used on the quilt grid)</label>
-                    <div className="abby-patch__store-color-picker">
-                      <HexColorPicker color={primaryColor} onChange={setPrimaryColor} />
-                      <span className="abby-patch__legend-hex">{primaryColor.toUpperCase()}</span>
-                    </div>
-                  </div>
+
+                  {imagePreview && (
+                    <FabricMotifEditor
+                      imageUrl={imagePreview}
+                      imageRef={motifImageRef}
+                      primaryColor={primaryColor}
+                      onPrimaryColorChange={setPrimaryColor}
+                      cropRect={cropRect}
+                      onCropRectChange={setCropRect}
+                      motifWidthIn={motifWidthIn}
+                      motifHeightIn={motifHeightIn}
+                      onMotifWidthChange={setMotifWidthIn}
+                      onMotifHeightChange={setMotifHeightIn}
+                      mode={editorMode}
+                      onModeChange={setEditorMode}
+                    />
+                  )}
+
                   <button type="submit" className="abby-patch__button" disabled={uploading}>
                     {uploading ? 'Uploading…' : 'Add fabric to catalog'}
                   </button>
@@ -307,6 +355,9 @@ export default function StorePortal() {
                           <p>
                             {fabric.primaryColor.toUpperCase()} · $
                             {fabric.pricePerYard.toFixed(2)}/yd
+                            {fabric.motifWidthIn && fabric.motifHeightIn
+                              ? ` · print ${fabric.motifWidthIn}×${fabric.motifHeightIn}″`
+                              : ''}
                           </p>
                         </div>
                       </li>
@@ -324,7 +375,6 @@ export default function StorePortal() {
         {error && <p className="abby-patch__auth-error">{error}</p>}
 
         <p className="abby-patch__store-footnote">
-          Looking for the quilt designer? That&apos;s for customer accounts.{' '}
           <Link to="/">Back to home</Link>
         </p>
       </div>

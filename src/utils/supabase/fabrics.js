@@ -1,10 +1,13 @@
 import { createClient } from './client';
 
+const FABRIC_COLUMNS =
+  'id, store_id, name, image_url, price_per_yard, primary_color, motif_width_in, motif_height_in, created_at';
+
 export async function fetchFabricsForStore(storeId) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('fabrics')
-    .select('id, store_id, name, image_url, price_per_yard, primary_color, created_at')
+    .select(FABRIC_COLUMNS)
     .eq('store_id', storeId)
     .order('created_at', { ascending: false });
 
@@ -21,6 +24,8 @@ export async function createFabric({
   imageUrl,
   pricePerYard,
   primaryColor,
+  motifWidthIn = null,
+  motifHeightIn = null,
 }) {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -31,8 +36,10 @@ export async function createFabric({
       image_url: imageUrl,
       price_per_yard: pricePerYard,
       primary_color: primaryColor,
+      motif_width_in: motifWidthIn,
+      motif_height_in: motifHeightIn,
     })
-    .select('id, store_id, name, image_url, price_per_yard, primary_color, created_at')
+    .select(FABRIC_COLUMNS)
     .single();
 
   if (error) {
@@ -49,7 +56,7 @@ export async function uploadFabricImage(ownerId, file) {
 
   const { error: uploadError } = await supabase.storage
     .from('fabric-images')
-    .upload(path, file, { upsert: false, contentType: file.type });
+    .upload(path, file, { upsert: false, contentType: file.type || 'image/jpeg' });
 
   if (uploadError) {
     throw uploadError;
@@ -64,6 +71,11 @@ export function mapFabricRow(row, storeName = '') {
     return null;
   }
 
+  const motifWidthIn =
+    row.motif_width_in != null ? Number(row.motif_width_in) : null;
+  const motifHeightIn =
+    row.motif_height_in != null ? Number(row.motif_height_in) : null;
+
   return {
     id: row.id,
     storeId: row.store_id,
@@ -72,5 +84,7 @@ export function mapFabricRow(row, storeName = '') {
     imageUrl: row.image_url,
     pricePerYard: Number(row.price_per_yard),
     primaryColor: row.primary_color,
+    motifWidthIn: Number.isFinite(motifWidthIn) && motifWidthIn > 0 ? motifWidthIn : null,
+    motifHeightIn: Number.isFinite(motifHeightIn) && motifHeightIn > 0 ? motifHeightIn : null,
   };
 }

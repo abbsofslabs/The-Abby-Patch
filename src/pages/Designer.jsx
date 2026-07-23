@@ -193,6 +193,8 @@ function Designer() {
     cellColors,
     cellColorsB,
     cellDiagonals,
+    cellFabricIds,
+    cellFabricIdsB,
     selectedBlocks,
     merges,
     cellMergeIds,
@@ -1972,6 +1974,10 @@ function Designer() {
                   cellColors={cellColors}
                   cellColorsB={cellColorsB}
                   cellDiagonals={cellDiagonals}
+                  cellFabricIds={cellFabricIds}
+                  cellFabricIdsB={cellFabricIdsB}
+                  fabricCatalog={fabricCatalog}
+                  blockSizeInches={grid.blockSize}
                   merges={merges}
                   cellMergeIds={cellMergeIds}
                   pieceMergeIds={pieceMergeIds}
