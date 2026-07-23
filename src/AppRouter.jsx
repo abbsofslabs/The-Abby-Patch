@@ -35,6 +35,14 @@ export default function AppRouter() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/store/demo"
+          element={
+            <ProtectedRoute roles={['store']}>
+              <Designer demoMode />
+            </ProtectedRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

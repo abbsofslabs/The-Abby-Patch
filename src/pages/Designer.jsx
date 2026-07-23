@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { HexColorPicker } from 'react-colorful';
 import logo from '../assets/abby-patch-logo.png';
 import BorderToolPanel from '../components/BorderToolPanel';
@@ -137,7 +138,7 @@ function normalizeSideState(side, rows, columns) {
   };
 }
 
-function Designer() {
+function Designer({ demoMode = false }) {
   const { user, signOut } = useAuth();
   const [workspaceTab, setWorkspaceTab] = useState('design');
   const [savedDesignId, setSavedDesignId] = useState(null);
@@ -208,7 +209,7 @@ function Designer() {
   );
 
   let downloadPricingMessage = null;
-  if (PAYWALL_ENABLED && !hasSubscription()) {
+  if (!demoMode && PAYWALL_ENABLED && !hasSubscription()) {
     downloadPricingMessage = hasUsedFree()
       ? 'You\u2019ve used your free download. Additional patterns are $2 each or $10/month unlimited.'
       : 'Your first pattern download is free. After that, additional downloads cost money.';
@@ -1480,7 +1481,11 @@ function Designer() {
           });
           setSavedDesignId(created.id);
           setSavedDesignName(created.name);
-          setSaveNotice(`Saved “${created.name}” to My patterns.`);
+          setSaveNotice(
+            demoMode
+              ? `Saved “${created.name}” to Demo patterns.`
+              : `Saved “${created.name}” to My patterns.`
+          );
         }
       } catch (saveError) {
         console.error(saveError);
@@ -1489,7 +1494,7 @@ function Designer() {
         setSaveBusy(false);
       }
     },
-    [user, canSaveDesign, savedDesignName, savedDesignId, grid, getDesignState]
+    [user, canSaveDesign, savedDesignName, savedDesignId, grid, getDesignState, demoMode]
   );
 
   const handleOpenSavedDesign = useCallback(
@@ -1550,12 +1555,7 @@ function Designer() {
       return;
     }
 
-    if (!PAYWALL_ENABLED) {
-      executePdfDownload();
-      return;
-    }
-
-    if (hasSubscription()) {
+    if (demoMode || !PAYWALL_ENABLED || hasSubscription()) {
       executePdfDownload();
       return;
     }
@@ -1566,7 +1566,7 @@ function Designer() {
     }
 
     setAccessModal('paywall');
-  }, [executePdfDownload, grid, yardageReport]);
+  }, [demoMode, executePdfDownload, grid, yardageReport]);
 
   const handleFreePatternSubmit = useCallback(
     (email) => {
@@ -1620,9 +1620,20 @@ function Designer() {
       <div className="abby-patch__main">
         <header className="abby-patch__header">
           <img src={logo} alt="The Abby Patch" className="abby-patch__logo" />
-          <p className="abby-patch__store-kicker">Customer account</p>
-          <p className="abby-patch__tagline">Design your quilt, one patch at a time</p>
+          <p className="abby-patch__store-kicker">
+            {demoMode ? 'Store demo mode' : 'Customer account'}
+          </p>
+          <p className="abby-patch__tagline">
+            {demoMode
+              ? 'Show customers how to design a quilt — save demos for later'
+              : 'Design your quilt, one patch at a time'}
+          </p>
           <div className="abby-patch__header-actions">
+            {demoMode && (
+              <Link to="/store" className="abby-patch__button abby-patch__button--secondary">
+                Back to store dashboard
+              </Link>
+            )}
             <span className="abby-patch__user-email">{user?.email}</span>
             <button type="button" className="abby-patch__link-button" onClick={() => signOut()}>
               Sign out
@@ -1630,7 +1641,18 @@ function Designer() {
           </div>
         </header>
 
-        <div className="abby-patch__workspace-tabs" role="tablist" aria-label="Customer workspace">
+        {demoMode && (
+          <p className="abby-patch__demo-banner abby-patch__panel" role="status">
+            Demo mode for in-store walkthroughs. Patterns you save here stay on this store account
+            under <strong>Demo patterns</strong>.
+          </p>
+        )}
+
+        <div
+          className="abby-patch__workspace-tabs"
+          role="tablist"
+          aria-label={demoMode ? 'Store demo workspace' : 'Customer workspace'}
+        >
           <button
             type="button"
             role="tab"
@@ -1647,7 +1669,7 @@ function Designer() {
             className={`abby-patch__tab ${workspaceTab === 'saved' ? 'abby-patch__tab--active' : ''}`}
             onClick={() => setWorkspaceTab('saved')}
           >
-            My patterns
+            {demoMode ? 'Demo patterns' : 'My patterns'}
           </button>
         </div>
 
@@ -1791,7 +1813,7 @@ function Designer() {
                 className="abby-patch__tool-button"
                 onClick={() => setWorkspaceTab('saved')}
               >
-                My patterns
+                {demoMode ? 'Demo patterns' : 'My patterns'}
               </button>
             </div>
             {savedDesignName && (
@@ -2120,13 +2142,13 @@ function Designer() {
           </>
         )}
       </div>
-      {PAYWALL_ENABLED && accessModal === 'free' && (
+      {!demoMode && PAYWALL_ENABLED && accessModal === 'free' && (
         <FreePatternModal
           initialEmail={savedEmail}
           onSubmit={handleFreePatternSubmit}
         />
       )}
-      {PAYWALL_ENABLED && accessModal === 'paywall' && (
+      {!demoMode && PAYWALL_ENABLED && accessModal === 'paywall' && (
         <PaywallModal
           initialEmail={savedEmail}
           onClose={() => setAccessModal(null)}

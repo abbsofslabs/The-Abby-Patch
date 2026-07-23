@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useHref } from 'react-router-dom';
 import logo from '../assets/abby-patch-logo.png';
 import FabricMotifEditor from '../components/FabricMotifEditor';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,7 @@ import { createStore, fetchStoreByOwner, updateStore } from '../utils/supabase/s
 
 export default function StorePortal() {
   const { user, profile, signOut } = useAuth();
+  const demoHref = useHref('/store/demo');
   const motifImageRef = useRef(null);
   const [store, setStore] = useState(null);
   const [fabrics, setFabrics] = useState([]);
@@ -203,6 +204,14 @@ export default function StorePortal() {
             </p>
           </div>
           <div className="abby-patch__header-actions">
+            <a
+              href={demoHref}
+              target="_blank"
+              rel="noreferrer"
+              className="abby-patch__button"
+            >
+              Open demo designer
+            </a>
             <span className="abby-patch__user-email">{user?.email}</span>
             <button
               type="button"
@@ -213,6 +222,22 @@ export default function StorePortal() {
             </button>
           </div>
         </header>
+
+        <section className="abby-patch__panel abby-patch__store-section abby-patch__demo-card">
+          <h2 className="abby-patch__section-title">Customer demo</h2>
+          <p className="abby-patch__tool-box-desc">
+            Open the quilt designer in a new tab to walk a customer through the product. You can
+            save demo patterns on this store account and reopen them anytime.
+          </p>
+          <a
+            href={demoHref}
+            target="_blank"
+            rel="noreferrer"
+            className="abby-patch__button"
+          >
+            Open demo designer in a new tab
+          </a>
+        </section>
 
         <ol className="abby-patch__store-steps">
           <li>Save your store profile</li>

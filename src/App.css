@@ -2623,12 +2623,24 @@
   color: var(--brown-mid);
 }
 
-.abby-patch__motif-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  width: 100%;
+.abby-patch__demo-banner {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1.1rem;
+  background: rgba(141, 160, 128, 0.18);
+  border: 1.5px solid rgba(141, 160, 128, 0.55);
+  color: var(--brown);
+  line-height: 1.45;
+  text-align: left;
 }
+
+.abby-patch__demo-card {
+  text-align: left;
+}
+
+.abby-patch__demo-card .abby-patch__button {
+  margin-top: 0.35rem;
+}
+
 
 .abby-patch__motif-toolbar {
   display: flex;
