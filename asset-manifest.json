@@ -1,0 +1,22 @@
+{
+  "files": {
+    "main.css": "./static/css/main.da7ebe7b.css",
+    "main.js": "./static/js/main.ba58ed77.js",
+    "static/js/239.8a832d0f.chunk.js": "./static/js/239.8a832d0f.chunk.js",
+    "static/js/977.764abd17.chunk.js": "./static/js/977.764abd17.chunk.js",
+    "static/js/455.bc867566.chunk.js": "./static/js/455.bc867566.chunk.js",
+    "static/js/453.47da1a78.chunk.js": "./static/js/453.47da1a78.chunk.js",
+    "static/media/abby-patch-logo.png": "./static/media/abby-patch-logo.98f6edce0bec0b770380.png",
+    "index.html": "./index.html",
+    "main.da7ebe7b.css.map": "./static/css/main.da7ebe7b.css.map",
+    "main.ba58ed77.js.map": "./static/js/main.ba58ed77.js.map",
+    "239.8a832d0f.chunk.js.map": "./static/js/239.8a832d0f.chunk.js.map",
+    "977.764abd17.chunk.js.map": "./static/js/977.764abd17.chunk.js.map",
+    "455.bc867566.chunk.js.map": "./static/js/455.bc867566.chunk.js.map",
+    "453.47da1a78.chunk.js.map": "./static/js/453.47da1a78.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.da7ebe7b.css",
+    "static/js/main.ba58ed77.js"
+  ]
+}
